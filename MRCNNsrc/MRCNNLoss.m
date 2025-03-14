@@ -7,7 +7,7 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
     end
 
     properties
-        MetricNames = ["Loss","RPNClass","RPNReg","Class", "Reg", "MaskLoss", "CountLoss"]
+        MetricNames = ["Loss","RPNClass","RPNReg","Class", "Reg", "MaskLoss"]
     end
 
 
@@ -42,7 +42,7 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
                                                                 obj.params.PositiveOverlapRange, obj.params.NegativeOverlapRange,...
                                                                 obj.params.ForcedPositiveProposals);
         
-        numPos = cellfun(@(x) sum(x), positiveIndex);
+        numPos = cellfun(@(x) sum(x), positiveIndex); %Calculate the number of positive examples in each batch
                                                             
         % Step 2: Calcuate regression targets as (dx, dy, log(dw), log(dh))
         regressionTargets = vision.internal.cnn.maskrcnn.generateRegressionTargets(gTruthBoxes, proposals,...
@@ -123,12 +123,11 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         %LossRPNClass = vision.internal.cnn.maskrcnn.CrossEntropy(YRPNClass, RPNClassificationTargets);
 
         LossRPNReg = vision.internal.cnn.maskrcnn.smoothL1(YRPNRegDeltas, RPNRegressionTargets, RPNRegWeights);
+        
 
         LossRPN = LossRPNClass + LossRPNReg;
         
-        numGT  = cellfun(@(x) size(x, 1), gTruthLabels);        
-       
-        LossObjCount = smape(numGT, numPos);
+        LossRPN = LossRPN * (2 - nnz(numPos)./length(numPos)); %Double RPN loss if there are no positive proposals
 
         
         % Total Loss
@@ -142,7 +141,6 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         lossData.Class = LossRCNNClass;
         lossData.Reg = LossRCNNReg;
         lossData.MaskLoss = LossRCNNMask;
-        lossData.CountLoss = LossObjCount;
 
         end
     end
