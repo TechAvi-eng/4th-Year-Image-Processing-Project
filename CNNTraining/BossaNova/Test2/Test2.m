@@ -17,24 +17,27 @@ ABs = [14 14; 14 21; 21 14;...
     47 47; 71 47; 47 71;...
     71 71];
 
-net = MRCNN(trainClassNames,ABs,InputSize=imageSizeTrain, ScaleFactor=[1 1]/16,ModelName='TestNet50')
+net = MRCNN(trainClassNames,ABs,InputSize=imageSizeTrain, ScaleFactor=[1 1]/16,ModelName='ResNet50')
 
 %%
 
 options = trainingOptions("adam", ...
-    InitialLearnRate=0.0005, ...
+    InitialLearnRate=0.001, ...
     LearnRateSchedule="piecewise", ...
-    LearnRateDropPeriod=30, ...
-    LearnRateDropFactor=0.1, ...
+    LearnRateDropPeriod=125, ...
+    LearnRateDropFactor=0.5, ...
     Plot="none", ...  
-    MaxEpochs=50, ...
-    MiniBatchSize=1, ...
+    MaxEpochs=500, ...
+    MiniBatchSize=2, ...
     ResetInputNormalization=false, ...
-    ExecutionEnvironment="auto", ...
+    ExecutionEnvironment="cpu", ...
     VerboseFrequency=1, ...
     L2Regularization=1e-5) 
 
-[net,info] = trainMRCNN(ds,net,options, NumStrongestRegions=100, NumRegionsToSample=10, PositiveOverlapRange=[0.5 1], NegativeOverlapRange=[0 0.5], ForcedPositiveProposals=false, FreezeSubNetwork="backbone")
+%%
+[net,info] = trainMRCNN(ds,net,options, NumStrongestRegions=100, NumRegionsToSample=50, PositiveOverlapRange=[0.5 1], NegativeOverlapRange=[0 0.5], ForcedPositiveProposals=false, FreezeSubNetwork="none")
+
+
 
 %%
 if ~exist("im")
@@ -74,7 +77,7 @@ dlFeatures = predict(net.FeatureExtractionNet, dlX, 'Acceleration','auto');
     
 [dlRPNScores, dlRPNReg] = predict(net.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
 
-for i = 1:100
+for i = 1:1024
 
     d = extractdata(dlFeatures(:,:,i));
     if max(d, [], "all")>0.1
@@ -87,3 +90,23 @@ for i = 1:100
     end
 
 end
+
+%%
+[see] = predict(net.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut'});
+
+%%
+
+for i = 1:13
+
+    d = (extractdata(see(:,:,i)));
+    if 1
+    
+    imagesc(d); colorbar
+    title(num2str(i))
+    %set(gca,'ColorScale','log')
+    caxis([0 1])
+        pause(0.6)
+    end
+
+end
+
