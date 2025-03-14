@@ -7,7 +7,7 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
     end
 
     properties
-        MetricNames = ["Loss","RPNClass","RPNReg","Class", "Reg", "MaskLoss"]
+        MetricNames = ["Loss","RPNClass","RPNReg","Class", "Reg", "MaskLoss", "CountLoss"]
     end
 
 
@@ -86,7 +86,7 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         regressionTargets = reshape(regressionTargets, 1, 1, size(YRCNNReg,3),[]);
         instanceWeightsReg = reshape(instanceWeightsReg, 1, 1, size(YRCNNReg,3),[]);
         LossRCNNReg = vision.internal.cnn.maskrcnn.smoothL1(YRCNNReg, single(regressionTargets), single(instanceWeightsReg));
-         
+
         % Mask Loss (Weighted cross entropy)
         maskTargets= cat(4,maskTargets{:});
         positiveIndex = cat(1,positiveIndex{:});
@@ -98,7 +98,7 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         % LossRCNNNum = abs(gtNum - numPosPredict)/(gtNum + numPosPredict);
         
         % Total Stage 2 loss
-         LossRCNN = LossRCNNReg + LossRCNNClass + LossRCNNMask;
+        LossRCNN = LossRCNNReg + LossRCNNClass + LossRCNNMask;
         
          
         % Generate RCNN response targets
@@ -119,11 +119,20 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         YRPNClass = sigmoid(YRPNClass);
 
         LossRPNClass = NegativeMining(YRPNClass, RPNClassificationTargets, 3); 
-         
+        %LossRPNClass = vision.internal.cnn.maskrcnn.CrossEntropy(YRPNClass, RPNClassificationTargets);
+
         LossRPNReg = vision.internal.cnn.maskrcnn.smoothL1(YRPNRegDeltas, RPNRegressionTargets, RPNRegWeights);
-         
+
         LossRPN = LossRPNClass + LossRPNReg;
         
+        numGT  = cellfun(@(x) size(x, 1), gTruthLabels);
+
+        numProp = cellfun(@(x) size(x, 1), proposals);
+        numPosPred = cumsum(squeeze(extractdata(YRCNNClass(:,:,1,:)))>0.5);
+        numPosPred = numPosPred(cumsum(numProp));
+
+        LossObjCount = smape(numGT, numPosPred);
+
         
         % Total Loss
         %------------
@@ -136,8 +145,34 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         lossData.Class = LossRCNNClass;
         lossData.Reg = LossRCNNReg;
         lossData.MaskLoss = LossRCNNMask;
+        lossData.CountLoss = LossObjCount;
 
         end
     end
 
+end
+
+
+function smape_value = smape(actual, predicted)
+    % SMAPE - Symmetric Mean Absolute Percentage Error
+    
+    % Calculate the absolute difference between actual and predicted
+    abs_diff = abs(actual - predicted);
+    
+    % Calculate the average of absolute actual and predicted values
+    abs_avg = (abs(actual) + abs(predicted)) / 2;
+    
+    % Find indices where the denominator is not zero
+    valid_indices = abs_avg ~= 0;
+    
+    % Return 0 if there are no valid indices
+    if sum(valid_indices) == 0
+        smape_value = 0;
+    else
+        % Calculate SMAPE only for valid indices
+        smape_valid = abs_diff(valid_indices) ./ abs_avg(valid_indices);
+        
+        % Take the mean
+        smape_value = mean(smape_valid);
+    end
 end

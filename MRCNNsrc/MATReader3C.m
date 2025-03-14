@@ -10,7 +10,7 @@ end
 
 [im, masks] = resizeImageandMask(im, masks, [528, 704]); %pad to desired size
 
-[im, masks] = augmentImage(im, masks); %random augmentation function
+%[im, masks] = augmentImage(im, masks); %random augmentation function
 
 out{1} = im;
 out{2} = bbox;

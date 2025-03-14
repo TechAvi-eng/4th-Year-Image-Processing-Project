@@ -180,7 +180,7 @@ classdef MRCNN < deep.internal.sdk.LearnableParameterContainer
                 conv1Name='conv1';
                 obj.InputSize = options.InputSize;
                 inputLayer = imageInputLayer(options.InputSize,'Normalization',"none",'Name', 'Input_data');
-                conv1 = convolution2dLayer([7 7], 64,"Stride",[2 2], "DilationFactor", [1 1], NumChannels=options.InputSize(3));
+                conv1 = convolution2dLayer([7 7], 64,"Stride",[2 2], "DilationFactor", [1 1], NumChannels=options.InputSize(3),BiasInitializer="zeros",BiasLearnRateFactor=0);
                 featureGraph = layerGraph(obj.FeatureExtractionNet);
 
                 featureGraph = replaceLayer(featureGraph, inputName, inputLayer);
@@ -212,19 +212,19 @@ classdef MRCNN < deep.internal.sdk.LearnableParameterContainer
                 % Update regression conv layer              
                 detGraph = layerGraph(obj.DetectionHeads);
                 regConvNode = 'detectorRegOut';
-                convReg = convolution2dLayer([1 1], numClasses*4, 'Name', 'detectorRegOut', 'WeightsInitializer','narrow-normal');
+                convReg = convolution2dLayer([1 1], numClasses*4, 'Name', 'detectorRegOut', 'WeightsInitializer','narrow-normal',BiasInitializer="zeros",BiasLearnRateFactor=0);
                 
                 detGraph = replaceLayer(detGraph, regConvNode, convReg);
                     
                 classConvNode = 'node_133';
-                convClass = convolution2dLayer([1 1], numClasses+1, 'Name', 'node_133', 'WeightsInitializer','narrow-normal');
+                convClass = convolution2dLayer([1 1], numClasses+1, 'Name', 'node_133', 'WeightsInitializer','narrow-normal',BiasInitializer="zeros",BiasLearnRateFactor=0);
                 detGraph = replaceLayer(detGraph, classConvNode, convClass);
 
                 obj.DetectionHeads = dlnetwork(detGraph, 'Initialize', false);
 
                 maskGraph = layerGraph(obj.MaskSegmentationHead);
                 convMaskNode = 'node_167';
-                convMask = convolution2dLayer([1 1], numClasses, 'Name','node_167','WeightsInitializer','narrow-normal');
+                convMask = convolution2dLayer([1 1], numClasses, 'Name','node_167','WeightsInitializer','narrow-normal',BiasInitializer="zeros",BiasLearnRateFactor=0);
                 maskGraph = replaceLayer(maskGraph, convMaskNode, convMask);
                 obj.MaskSegmentationHead = dlnetwork(maskGraph, 'Initialize', false);
             end
@@ -239,12 +239,12 @@ classdef MRCNN < deep.internal.sdk.LearnableParameterContainer
                 % update the RPN branch architecture
                 rpnGraph = layerGraph(obj.RegionProposalNet);
                 rpnRegConvNode = 'RPNRegOut';
-                convReg = convolution2dLayer([1 1], numAnchors*4, 'Name', 'RPNRegOut','WeightsInitializer','narrow-normal');
+                convReg = convolution2dLayer([1 1], numAnchors*4, 'Name', 'RPNRegOut','WeightsInitializer','narrow-normal',BiasInitializer="zeros",BiasLearnRateFactor=0);
                 
                 rpnGraph = replaceLayer(rpnGraph, rpnRegConvNode, convReg);
 
                 rpnClassConvNode = 'RPNClassOut';
-                convClass = convolution2dLayer([1 1], numAnchors, 'Name', 'RPNClassOut','WeightsInitializer','narrow-normal');
+                convClass = convolution2dLayer([1 1], numAnchors, 'Name', 'RPNClassOut','WeightsInitializer','narrow-normal',BiasInitializer="zeros",BiasLearnRateFactor=0);
                 
                 rpnGraph = replaceLayer(rpnGraph, rpnClassConvNode, convClass);
 

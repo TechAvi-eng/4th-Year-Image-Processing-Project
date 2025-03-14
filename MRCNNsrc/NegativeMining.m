@@ -44,6 +44,7 @@ function loss = NegativeMining(YRPNClass, RPNClassificationTargets, Ratio)
 
     % Compute cross-entropy loss batch-wise, normalize for number of
     % examples used
-    loss = crossentropy(ClassY, TargetsY);
+
+    loss = -mean(TargetsY.*log(ClassY) + (1-TargetsY).*log(1- ClassY));
     
 end
