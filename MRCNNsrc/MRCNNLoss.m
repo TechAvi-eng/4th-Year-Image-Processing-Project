@@ -42,6 +42,7 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
                                                                 obj.params.PositiveOverlapRange, obj.params.NegativeOverlapRange,...
                                                                 obj.params.ForcedPositiveProposals);
         
+        numPos = cellfun(@(x) sum(x), positiveIndex);
                                                             
         % Step 2: Calcuate regression targets as (dx, dy, log(dw), log(dh))
         regressionTargets = vision.internal.cnn.maskrcnn.generateRegressionTargets(gTruthBoxes, proposals,...
@@ -125,13 +126,9 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
 
         LossRPN = LossRPNClass + LossRPNReg;
         
-        numGT  = cellfun(@(x) size(x, 1), gTruthLabels);
-
-        numProp = cellfun(@(x) size(x, 1), proposals);
-        numPosPred = cumsum(squeeze(extractdata(YRCNNClass(:,:,1,:)))>0.5);
-        numPosPred = numPosPred(cumsum(numProp));
-
-        LossObjCount = smape(numGT, numPosPred);
+        numGT  = cellfun(@(x) size(x, 1), gTruthLabels);        
+       
+        LossObjCount = smape(numGT, numPos);
 
         
         % Total Loss
@@ -154,7 +151,23 @@ end
 
 
 function smape_value = smape(actual, predicted)
-    % SMAPE - Symmetric Mean Absolute Percentage Error
+    % SMAPE - Modified Symmetric Mean Absolute Percentage Error
+    %
+    % This function calculates a modified version of the SMAPE where the error
+    % is only counted when the predicted value is less than or equal to the actual value.
+    % When predicted > actual, the error contribution is set to zero.
+    %
+    % Syntax:
+    %   smape_value = smape(actual, predicted)
+    %
+    % Inputs:
+    %   actual    - A vector of actual values
+    %   predicted - A vector of predicted values of the same size as actual
+    %
+    % Output:
+    %   smape_value - The modified SMAPE value as a decimal (0 to 2)
+    %                - Returns 0 if there are no valid calculation pairs
+    %                - Returns 0 for pairs where predicted > actual
     
     % Calculate the absolute difference between actual and predicted
     abs_diff = abs(actual - predicted);
@@ -165,12 +178,18 @@ function smape_value = smape(actual, predicted)
     % Find indices where the denominator is not zero
     valid_indices = abs_avg ~= 0;
     
+    % Find indices where predicted <= actual
+    pred_smaller_indices = predicted <= actual;
+    
+    % Combine both conditions: valid denominator AND predicted <= actual
+    included_indices = valid_indices & pred_smaller_indices;
+    
     % Return 0 if there are no valid indices
-    if sum(valid_indices) == 0
+    if sum(included_indices) == 0
         smape_value = 0;
     else
-        % Calculate SMAPE only for valid indices
-        smape_valid = abs_diff(valid_indices) ./ abs_avg(valid_indices);
+        % Calculate SMAPE only for valid indices where predicted <= actual
+        smape_valid = abs_diff(included_indices) ./ abs_avg(included_indices);
         
         % Take the mean
         smape_value = mean(smape_valid);
