@@ -27,7 +27,7 @@ options = trainingOptions("adam", ...
     LearnRateDropPeriod=125, ...
     LearnRateDropFactor=0.5, ...
     Plot="none", ...  
-    MaxEpochs=500, ...
+    MaxEpochs=200, ...
     MiniBatchSize=1, ...
     ResetInputNormalization=false, ...
     ExecutionEnvironment="cpu", ...
@@ -49,16 +49,16 @@ end
 
 tic
 for i = 1
-[masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.0001,NumStrongestRegions=5000, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );
+[masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.5,NumStrongestRegions=1000, SelectStrongest=true, MinSize=[4 4],MaxSize=[80 80] );
 
 if(isempty(masks))
     overlayedImage = im(:,:,1);
 else
     overlayedImage = insertObjectMask(im(:,:,1), masks,Color=lines(size(masks, 3)) );
 end
-
+%%
 figure, imshow(overlayedImage)
-% showShape("rectangle", gather(boxes), "Label", scores, "LineColor",'r')
+showShape("rectangle", gather(boxes), "Label", scores, "LineColor",'r')
 
 end
 toc
@@ -77,6 +77,7 @@ dlFeatures = predict(net.FeatureExtractionNet, dlX, 'Acceleration','auto');
     
 [dlRPNScores, dlRPNReg] = predict(net.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
 
+%%
 for i = 1:1024
 
     d = extractdata(dlFeatures(:,:,i));
@@ -104,7 +105,7 @@ for i = 1:13
     imagesc(d); colorbar
     title(num2str(i))
     %set(gca,'ColorScale','log')
-    caxis([0 1])
+    %caxis([0 1])
         pause(0.6)
     end
 

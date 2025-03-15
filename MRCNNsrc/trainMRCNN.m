@@ -179,7 +179,7 @@ function [network, info] = trainMRCNN(trainingData, network, options, params)
                                                 mustBeNonNan, mustBeInteger, mustBeFinite, mustBeReal} = 128
         params.FreezeSubNetwork string {iValidateFreezeSubNetwork} = "none"
         params.ExperimentMonitor experiments.Monitor {mustBeScalarOrEmpty, iValidateMonitor} = experiments.Monitor.empty()
-        params.ForcedPositiveProposals logical = 1;
+        params.ForcedPositiveProposals logical = 0;
 
     end
 
@@ -307,7 +307,7 @@ function trainConfig = getMaskRCNNTrainConfig(network)
     trainConfig.ClassNames = {network.ClassNames, 'background'};
     trainConfig.BackgroundClass = 'background';
     trainConfig.ClassAgnosticMasks = false;  
-    trainConfig.ScaleFactor = [1 1]/32;
+    trainConfig.ScaleFactor = network.ScaleFactor;
 
     %TODO: remove and read from net
     trainConfig.MaskOutputSize = [14 14];

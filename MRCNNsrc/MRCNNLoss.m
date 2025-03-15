@@ -2,7 +2,7 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
 % This class defines the loss for maskrcnn object training
 
 % Copyright 2021-2023 The MathWorks, Inc.
-    properties (Access=private)
+    properties (Access=public)
         params
     end
 
@@ -126,8 +126,8 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         
 
         LossRPN = LossRPNClass + LossRPNReg;
-        
-        LossRPN = LossRPN * (2 - nnz(numPos)./length(numPos)); %Double RPN loss if there are no positive proposals
+        %Double RPN loss if there are no positive proposals (adjusted for minibatch average)
+        LossRPN = LossRPN * (2 - nnz(numPos)/length(numPos)); 
 
         
         % Total Loss
@@ -147,49 +147,3 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
 
 end
 
-
-function smape_value = smape(actual, predicted)
-    % SMAPE - Modified Symmetric Mean Absolute Percentage Error
-    %
-    % This function calculates a modified version of the SMAPE where the error
-    % is only counted when the predicted value is less than or equal to the actual value.
-    % When predicted > actual, the error contribution is set to zero.
-    %
-    % Syntax:
-    %   smape_value = smape(actual, predicted)
-    %
-    % Inputs:
-    %   actual    - A vector of actual values
-    %   predicted - A vector of predicted values of the same size as actual
-    %
-    % Output:
-    %   smape_value - The modified SMAPE value as a decimal (0 to 2)
-    %                - Returns 0 if there are no valid calculation pairs
-    %                - Returns 0 for pairs where predicted > actual
-    
-    % Calculate the absolute difference between actual and predicted
-    abs_diff = abs(actual - predicted);
-    
-    % Calculate the average of absolute actual and predicted values
-    abs_avg = (abs(actual) + abs(predicted)) / 2;
-    
-    % Find indices where the denominator is not zero
-    valid_indices = abs_avg ~= 0;
-    
-    % Find indices where predicted <= actual
-    pred_smaller_indices = predicted <= actual;
-    
-    % Combine both conditions: valid denominator AND predicted <= actual
-    included_indices = valid_indices & pred_smaller_indices;
-    
-    % Return 0 if there are no valid indices
-    if sum(included_indices) == 0
-        smape_value = 0;
-    else
-        % Calculate SMAPE only for valid indices where predicted <= actual
-        smape_valid = abs_diff(included_indices) ./ abs_avg(included_indices);
-        
-        % Take the mean
-        smape_value = mean(smape_valid);
-    end
-end
