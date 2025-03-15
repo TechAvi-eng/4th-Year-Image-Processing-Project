@@ -26,6 +26,6 @@ net5 = removeLayers(net5, 'stage5_input');
 dlnetFeature = net4;
 dlnetPostFeature = net5;
 clear net net4 net5 s5l1 s5l2 ans
-save("/Users/yigit/Desktop/Stuff/Mechanical Engineering/4YP_Github/CNNTraining/BossaNova/NetDataResNext101/dlnetFeature.mat","dlnetFeature")
+save("/Users/yigit/Desktop/Stuff/Mechanical Engineering/4YP_Github/MRCNNsrc/NetData/ResNeXt101/dlnetFeature.mat","dlnetFeature")
 save("/Users/yigit/Desktop/Stuff/Mechanical Engineering/4YP_Github/CNNTraining/BossaNova/NetDataResNext101/dlnetPostFeature.mat","dlnetPostFeature")
 

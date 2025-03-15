@@ -24,13 +24,13 @@
 
 
 # Set the name of the job.
-#$ -N Res50
+#$ -N Res101
 
 # Set the working directory to somewhere in your scratch space.
 # This is a necessary step as compute nodes cannot write to $HOME.
 # Replace "<your_UCL_id>" with your UCL user ID.
 # This directory must already exist.
-#$ -wd /home/zcemydo/Scratch/Train5
+#$ -wd /home/zcemydo/Scratch/Train6
 
 # Your work should be done in $TMPDIR
 cd $TMPDIR
@@ -45,7 +45,7 @@ module list
 # If you do not copy them in, you must always refer to them using a
 # full path so they can be found, eg. ~/Scratch/Matlab_examples/analyse.m
 
-cp ~/Scratch/Train5/Res50.m $TMPDIR
+cp ~/Scratch/Train6/Res101.m $TMPDIR
 
 
 
@@ -55,10 +55,10 @@ echo "Running MATLAB..."
 echo ""
 
 #run matlab script(s)
-matlab -nosplash -nodesktop -nodisplay < Res50.m
+matlab -nosplash -nodesktop -nodisplay < Res101.m
 
 
 # tar up all contents of $TMPDIR back into your space
-tar zcvf $HOME/Scratch/Train5/Res50_${JOB_ID}.tgz $TMPDIR
+tar zcvf $HOME/Scratch/Train6/Res101_${JOB_ID}.tgz $TMPDIR
 
 # Make sure you have given enough time for the copy to complete!

@@ -6,7 +6,7 @@ lgraph_stage5 = layerGraph();
 % Input layer
 inputLayers = [
     imageInputLayer(inputSize, 'Name', 'Input_data')
-    convolution2dLayer([7 7], 64, 'Stride', 2, 'Padding', 3, 'Name', 'conv1')
+    convolution2dLayer([7 7], 64, 'Stride', 2, 'Padding', 3, 'Name', 'conv1', 'BiasInitializer','zeros','BiasLearnRateFactor',0)
     groupNormalizationLayer(min(32, 64 / 8), 'Name', 'gn1')  % Group Normalization
     reluLayer('Name', 'relu1')
     maxPooling2dLayer(3, 'Stride', 2, 'Padding', 1, 'Name', 'maxpool1')
@@ -46,15 +46,15 @@ for stageIdx = 1:length(configs)
 
         % Main path layers
         mainPath = [
-            convolution2dLayer(1, width, 'Name', [baseName '_conv1'], 'Padding', 'same')
+            convolution2dLayer(1, width, 'Name', [baseName '_conv1'], 'Padding', 'same', 'BiasInitializer','zeros','BiasLearnRateFactor',0)
             groupNormalizationLayer(numGroups, 'Name', [baseName '_gn1'])
             reluLayer('Name', [baseName '_relu1'])
             
-            groupedConvolution2dLayer(3, width, cardinality, 'Stride', stride, 'Name', [baseName '_conv2'], 'Padding', 'same')
+            groupedConvolution2dLayer(3, width, cardinality, 'Stride', stride, 'Name', [baseName '_conv2'], 'Padding', 'same', 'BiasInitializer','zeros','BiasLearnRateFactor',0)
             groupNormalizationLayer(numGroups, 'Name', [baseName '_gn2'])
             reluLayer('Name', [baseName '_relu2'])
             
-            convolution2dLayer(1, config.channels, 'Name', [baseName '_conv3'], 'Padding', 'same')
+            convolution2dLayer(1, config.channels, 'Name', [baseName '_conv3'], 'Padding', 'same', 'BiasInitializer','zeros','BiasLearnRateFactor',0)
             groupNormalizationLayer(numGroups, 'Name', [baseName '_gn3'])
             reluLayer('Name', [baseName '_relu_final'])
         ];
