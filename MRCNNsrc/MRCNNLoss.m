@@ -118,9 +118,12 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         % Stage 1 (RPN) Loss
         % --------------------
         YRPNClass = sigmoid(YRPNClass);
-
+    
+        %adjust targets for 0 value in the softmax
+        %RPNClassificationTargets(RPNClassificationTargets(==0) = 1/size(RPNClassificationTargets, 3);
         %LossRPNClass = NegativeMining(YRPNClass, RPNClassificationTargets, 3); 
-        LossRPNClass = vision.internal.cnn.maskrcnn.CrossEntropy(YRPNClass, RPNClassificationTargets);
+        %LossRPNClass = vision.internal.cnn.maskrcnn.CrossEntropy(YRPNClass, RPNClassificationTargets);
+        LossRPNClass = RPNClassLoss(YRPNClass, RPNClassificationTargets);
 
         LossRPNReg = vision.internal.cnn.maskrcnn.smoothL1(YRPNRegDeltas, RPNRegressionTargets, RPNRegWeights);
         

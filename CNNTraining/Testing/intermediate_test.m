@@ -5,7 +5,7 @@ for i = 1:300
     
     imagesc(d); colorbar
     title(num2str(i))
-    set(gca,'ColorScale','log')
+    %set(gca,'ColorScale','log')
 
         pause(0.2)
     end
@@ -20,8 +20,9 @@ for i = 1:13
     
     imagesc(d); colorbar
     title(num2str(i))
-        pause(0.6)
+        caxis([0 1])
 
+        pause(0.6)
 end
 
 %%
@@ -31,6 +32,8 @@ for i = 1:13
     
     imagesc(d); colorbar
     title(num2str(i))
-        pause(1)
+            caxis([0 1])
+
+        pause(0.5)
 
 end

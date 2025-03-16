@@ -289,6 +289,7 @@ classdef MRCNN < deep.internal.sdk.LearnableParameterContainer
 
             [dlRPNScores, dlRPNReg] = predict(obj.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
             
+
             % Call region proposal
             dlProposals = regionProposal(obj, dlRPNReg, dlRPNScores);
             

@@ -2,11 +2,11 @@ clear
 clc
 close all
 
-load("Res101-FINAL.mat", 'net');
+load("Res101-new.mat", 'net');
 
 %%
 
-ds = fileDatastore("./SmallDSFs/", ReadFcn=@(x)MATReader1C(x, 0)); %training data
+ds = fileDatastore("../SmallDSFs/", ReadFcn=@(x)MATReader1C(x, 0)); %training data
 
 %%
 options = trainingOptions("adam", ...
@@ -20,13 +20,11 @@ options = trainingOptions("adam", ...
     ResetInputNormalization=false, ...
     ExecutionEnvironment="cpu", ...
     VerboseFrequency=1, ...
-    L2Regularization=1e-5) 
+    L2Regularization=1e-4) 
 
 %%
-[net,info] = trainMRCNN(ds,net,options, NumStrongestRegions=1000, NumRegionsToSample=100, PositiveOverlapRange=[0.5 1], NegativeOverlapRange=[0 0.5], ForcedPositiveProposals=false, FreezeSubNetwork="backbone")
+[net,info] = trainMRCNN(ds,net,options, NumStrongestRegions=1000, NumRegionsToSample=128, PositiveOverlapRange=[0.5 1], NegativeOverlapRange=[0 0.5], ForcedPositiveProposals=false, FreezeSubNetwork="backbone")
 
 
-%%
-max(net.RegionProposalNet.Layers(3,1).Weights, [], 'all')
 
 %%
