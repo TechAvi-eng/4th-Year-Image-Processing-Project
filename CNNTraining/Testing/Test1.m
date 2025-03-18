@@ -37,7 +37,7 @@ options = trainingOptions("adam", ...
 %%
  
 
-[net,info] = trainMRCNN(ds,net,options, NumStrongestRegions=20, NumRegionsToSample=10, PositiveOverlapRange=[0.5 1], NegativeOverlapRange=[0 0.5], ForcedPositiveProposals=true, FreezeSubNetwork="backbone") 
+[net,info] = trainMRCNN(ds,net,options, NumStrongestRegions=400, NumRegionsToSample=128, PositiveOverlapRange=[0.5 1], NegativeOverlapRange=[0 0.5], ForcedPositiveProposals=false, FreezeSubNetwork="none") 
 
 
 %%
@@ -53,9 +53,8 @@ tic
 % im1=imread("../JSON_FORMATTING/LiveCellsIms1/livecell_test_images/A172_Phase_C7_1_00d00h00m_3.tif");
 % 
 %net.ProposalsOutsideImage='clip';
-     [masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.5,NumStrongestRegions=1000, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );
-%  
-% %%
+     [masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.1,NumStrongestRegions=5000, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );
+
 % imshow(insertObjectMask(im1,masks, Color=lines(size(masks, 3))))
 
 if(isempty(masks))
