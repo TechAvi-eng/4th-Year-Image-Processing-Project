@@ -1,6 +1,6 @@
 function net = createEfficientNetDownsamplingTail()
     % EfficientNet-style downsampling tail block with residual connection
-    % Now enhanced with Squeeze-and-Excitation (SE) block
+    % Enhanced with Squeeze-and-Excitation (SE) block and improved implementation
     % Input: 14x14x1024 → Output: 7x7x2048
 
     lgraph = layerGraph();
@@ -10,39 +10,34 @@ function net = createEfficientNetDownsamplingTail()
     outChannels = 2048;
     expansion = 2;
     expanded = inChannels * expansion;
-    seRatio = 0.25;  % Added SE ratio parameter
-
-    % Calculate numGroups for GroupNorm
-    numGroupsExpanded = min(floor(expanded / 32), 32);
-    numGroupsExpanded = max(numGroupsExpanded, 1);
-    while mod(expanded, numGroupsExpanded) ~= 0 && numGroupsExpanded > 1
-        numGroupsExpanded = numGroupsExpanded - 1;
-    end
-    numGroupsOut = min(floor(outChannels / 32), 32);
-    numGroupsOut = max(numGroupsOut, 1);
-    while mod(outChannels, numGroupsOut) ~= 0 && numGroupsOut > 1
-        numGroupsOut = numGroupsOut - 1;
-    end
+    seRatio = 0.25;  % SE ratio parameter
 
     % Input layer for 14x14x1024 input
     inputLayer = imageInputLayer([14 14 inChannels], 'Name', 'input', 'Normalization', 'none');
     lgraph = addLayers(lgraph, inputLayer);
 
     %% Main path layers
-    mainLayers = [
+    % 1. Expansion (1x1 conv)
+    expandLayers = [
         convolution2dLayer(1, expanded, 'Stride', 1, 'Padding', 'same', ...
             'Name', [blockName '_expand_conv'], ...
             'BiasLearnRateFactor', 0, 'BiasInitializer', 'zeros')
-        groupNormalizationLayer(numGroupsExpanded, 'Name', [blockName '_gn1'])
+        groupNormalizationLayer(calculateNumGroups(expanded), 'Name', [blockName '_gn1'])
         swishLayer('Name', [blockName '_swish1'])
-
+    ];
+    lgraph = addLayers(lgraph, expandLayers);
+    lgraph = connectLayers(lgraph, 'input', [blockName '_expand_conv']);
+    
+    % 2. Depthwise (3x3 with stride 2 for spatial reduction)
+    dwLayers = [
         groupedConvolution2dLayer(3, 1, expanded, 'Stride', 2, ...
-            'Padding', 'same', 'Name', [blockName '_depthwise_conv'])
-        groupNormalizationLayer(numGroupsExpanded, 'Name', [blockName '_gn2'])
+            'Padding', 'same', 'Name', [blockName '_depthwise_conv'], ...
+            'BiasLearnRateFactor', 0, 'BiasInitializer', 'zeros')
+        groupNormalizationLayer(calculateNumGroups(expanded), 'Name', [blockName '_gn2'])
         swishLayer('Name', [blockName '_swish2'])
     ];
-    lgraph = addLayers(lgraph, mainLayers);
-    lgraph = connectLayers(lgraph, 'input', [blockName '_expand_conv']);
+    lgraph = addLayers(lgraph, dwLayers);
+    lgraph = connectLayers(lgraph, [blockName '_swish1'], [blockName '_depthwise_conv']);
 
     %% Add Squeeze-and-Excitation block after depthwise conv
     if seRatio > 0
@@ -52,22 +47,22 @@ function net = createEfficientNetDownsamplingTail()
         lastLayerAfterSE = [blockName '_swish2'];
     end
 
-    %% Project path (1x1 conv)
+    %% Project path (1x1 conv to change channels)
     projectLayers = [
         convolution2dLayer(1, outChannels, 'Stride', 1, 'Padding', 'same', ...
             'Name', [blockName '_project_conv'], ...
             'BiasLearnRateFactor', 0, 'BiasInitializer', 'zeros')
-        groupNormalizationLayer(numGroupsOut, 'Name', [blockName '_gn3'])
+        groupNormalizationLayer(calculateNumGroups(outChannels), 'Name', [blockName '_gn3'])
     ];
     lgraph = addLayers(lgraph, projectLayers);
     lgraph = connectLayers(lgraph, lastLayerAfterSE, [blockName '_project_conv']);
 
-    %% Shortcut projection path
+    %% Shortcut projection path (handles both spatial reduction and channel increase)
     shortcutLayers = [
         convolution2dLayer(1, outChannels, 'Stride', 2, 'Padding', 'same', ...
             'Name', [blockName '_shortcut_conv'], ...
             'BiasLearnRateFactor', 0, 'BiasInitializer', 'zeros')
-        groupNormalizationLayer(numGroupsOut, 'Name', [blockName '_shortcut_gn'])
+        groupNormalizationLayer(calculateNumGroups(outChannels), 'Name', [blockName '_shortcut_gn'])
     ];
     lgraph = addLayers(lgraph, shortcutLayers);
     lgraph = connectLayers(lgraph, 'input', [blockName '_shortcut_conv']);
@@ -83,10 +78,12 @@ function net = createEfficientNetDownsamplingTail()
 
     % Connect shortcut path
     lgraph = connectLayers(lgraph, [blockName '_shortcut_gn'], [blockName '_add/in2']);
+    
+    % Connect addition to final activation
+    %lgraph = connectLayers(lgraph, [blockName '_add'], [blockName '_swish_out']);
 
     %% Final dlnetwork
-    exampleInput = dlarray(zeros(14, 14, 1024, 1), 'SSCB');
-    net = dlnetwork(lgraph, 'Initialize', true);
+    net = dlnetwork(lgraph);
 end
 
 function [lgraph, outputName] = addSqueezeExcitationBlock(lgraph, inputName, channels, seRatio, blockName)
@@ -103,14 +100,15 @@ function [lgraph, outputName] = addSqueezeExcitationBlock(lgraph, inputName, cha
     poolLayer = globalAveragePooling2dLayer('Name', [blockName '_se_pool']);
     
     % 2. Fully connected layers for channel attention
-    fc1 = convolution2dLayer(1, bottleneckChannels, 'Name', [blockName '_se_fc1']);
+    fc1 = convolution2dLayer(1, bottleneckChannels, 'Name', [blockName '_se_fc1'], ...
+        'BiasLearnRateFactor', 1, 'BiasInitializer', 'zeros');
     swish1 = swishLayer('Name', [blockName '_se_swish']);
-    fc2 = convolution2dLayer(1, channels, 'Name', [blockName '_se_fc2']);
+    fc2 = convolution2dLayer(1, channels, 'Name', [blockName '_se_fc2'], ...
+        'BiasLearnRateFactor', 1, 'BiasInitializer', 'zeros');
     sigmoid1 = sigmoidLayer('Name', [blockName '_se_sigmoid']);
     
-    % 3. Custom function layer to reshape and apply weights to input feature map
-    seApplyLayer = multiplicationLayer(2, ...
-                                'Name', [blockName '_se_apply']);
+    % 3. Multiplication layer to apply channel attention
+    seApplyLayer = multiplicationLayer(2, 'Name', [blockName '_se_apply']);
     
     % Add all layers to graph
     lgraph = addLayers(lgraph, poolLayer);
@@ -135,14 +133,11 @@ function [lgraph, outputName] = addSqueezeExcitationBlock(lgraph, inputName, cha
     outputName = [blockName '_se_apply'];
 end
 
-function output = applyChannelAttention(weights, featureMap)
-    % This function applies channel attention weights to the input feature map
-    % weights: output from sigmoid (batch_size x num_channels)
-    % featureMap: input feature map (height x width x channels x batch_size)
-    
-    % Get dimensions
-    [h, w, c, n] = size(featureMap);
-    
-    % Apply attention via multiplication
-    output = featureMap .* weights;
+function numGroups = calculateNumGroups(numChannels)
+    % Calculate suitable number of groups for group normalization
+    numGroups = min(floor(numChannels / 32), 32);
+    numGroups = max(numGroups, 1);
+    while mod(numChannels, numGroups) ~= 0 && numGroups > 1
+        numGroups = numGroups - 1;
+    end
 end

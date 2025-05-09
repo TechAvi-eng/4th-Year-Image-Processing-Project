@@ -4,7 +4,7 @@ load(filename);
 
 im = rescale(im);
 
-im = DWT_Denoise(im);
+%im = DWT_Denoise(im);
 
 sz = [520 704];
 paddedH = 528;
