@@ -79,7 +79,7 @@ proposals = single(vertcat(proposals{:}));
             
 if(isempty(proposals))
     warning('Empty Proposals. Using single dummy proposal');
-    proposals = dlarray([100 20 120 40 1], 'SSCB');
+    proposals = dlarray([100 20 120 40 1]);
 end
 
 % convert to 5XM format

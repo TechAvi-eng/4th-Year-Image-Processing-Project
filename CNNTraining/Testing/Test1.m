@@ -18,7 +18,7 @@ ABs = [21 21; 21 32; 32 21;...
     107 107; 160 107; 107 160; ...
     160 160];
 
-net = MRCNN(trainClassNames,ABs,InputSize=imageSizeTrain, ScaleFactor=[1 1]/16,ModelName='Effv2_1')
+net = MRCNN(trainClassNames,ABs,InputSize=imageSizeTrain, ScaleFactor=[1 1]/16,ModelName='Effv2_2')
 
 
 %%
@@ -29,7 +29,7 @@ options = trainingOptions("adam", ...
     LearnRateDropFactor=0.1, ...
     Plot="none", ...  
     MaxEpochs=320, ...
-    MiniBatchSize=1, ...
+    MiniBatchSize=2, ...
     ResetInputNormalization=false, ...
     ExecutionEnvironment="cpu", ...
     VerboseFrequency=1, ...
@@ -54,7 +54,7 @@ im=repmat(im ,[1 1 1]);
 %%
 net.OverlapThresholdRPN = 0.3;
 net.OverlapThresholdPrediction = 0.3;
-net.ScoreThreshold=0.0001;
+net.ScoreThreshold=0.2;
 
 %%
 im=rand([528 704]);
@@ -65,7 +65,7 @@ tic
 % 
 %net.ProposalsOutsideImage='clip';
 %net.MinScore = 0.001;
-     [masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.1,NumStrongestRegions=1000, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );
+     [masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.5,NumStrongestRegions=1000, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );
 toc
 
 %scores = 1./(1+exp(-scores));
@@ -78,6 +78,7 @@ if(isempty(masks))
 else
     overlayedImage = insertObjectMask(im(:,:,1), masks,Color=lines(size(masks, 3)) );
 end
+
 
 figure, imshow(overlayedImage)
 
@@ -116,3 +117,4 @@ toc
 
 %%
 
+= segmentFrame(net, im,RPN, )

@@ -150,7 +150,7 @@ function [precision, recall, ap] = calculate_combined_pr_curve(all_pred_boxes, a
     % Calculate precision and recall at each detection
     precision = cum_tp ./ (cum_tp + cum_fp);
     recall = cum_tp / total_gt_count;
-    
+    %recall = rescale(recall)*0.95;
     % Add beginning and end points for plotting a complete curve
     precision_for_plot = [1; precision; 0];
     recall_for_plot = [0; recall; 1];

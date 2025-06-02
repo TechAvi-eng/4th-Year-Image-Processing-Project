@@ -424,7 +424,7 @@ classdef MRCNN < deep.internal.sdk.LearnableParameterContainer
         arguments
             obj 
             im {}
-            options.Threshold (1,1){mustBeNumeric, mustBePositive, mustBeLessThanOrEqual(options.Threshold, 1), mustBeReal} = 0.7
+            options.Threshold (1,1){mustBeNumeric, mustBePositive, mustBeLessThanOrEqual(options.Threshold, 1), mustBeReal} = 0.5
             options.NumStrongestRegions (1,1) {mustBeNumeric, mustBePositive, mustBeReal} = 1000
             options.SelectStrongest (1,1) logical = true
             options.MinSize (1,2) {mustBeNumeric, mustBePositive, mustBeReal, mustBeInteger} = [1,1]
