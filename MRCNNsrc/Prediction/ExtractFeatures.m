@@ -1,148 +1,137 @@
-function extractedTable = ExtractFeatures(image, masks, boundingBoxes, scores, pixeltoLengthRatio)
-
-% Bugs
-% some proposals result in different data types, potentially related
-% to empty proposals or certain shapes?
-% test with mutliple images outputted from the CNN to identify what causes
-% the data types to change and make it consistent for all inputs
-
-% Scores
-% Functionality to store confidence scores for each cell added.
-% Requires ammending once the CNN output/function input has the scores
-% added.
-
-
+function im = DWT_Denoise(im, Options)
+% DWT_DENOISE De-noises image via DWT-thresholding on multiple levels of decomposition
+%
+% This function performs image denoising using Discrete Wavelet Transform (DWT)
+% by applying soft thresholding to the detail coefficients at multiple decomposition levels.
+% The denoising process involves:
+% 1. Multi-level DWT decomposition
+% 2. Soft thresholding of detail coefficients (horizontal, vertical, diagonal)
+% 3. Reconstruction via inverse DWT
 
 arguments
-    image % Input image
-    masks % Binary masks for segmented cells
-    boundingBoxes % Bounding boxes for each cell
-    scores = []; % Scores input from CNN
-    pixeltoLengthRatio (1,1) {mustBePositive} = 1; % Conversion factor from pixels to length
+    im                                                                      % Input image to be denoised
+    Options.Wavelet char = 'db5'                                           % Wavelet type (default: Daubechies 5)
+    Options.Level (1,1) {mustBeInteger, mustBeReal} = 4                    % Number of decomposition levels
+    Options.Threshold {mustBeGreaterThanOrEqual(Options.Threshold, 0), ...
+                      mustBeLessThan(Options.Threshold, 1), ...
+                      mustBeReal(Options.Threshold)} = 0.02                % Threshold factor(s) for denoising
 end
 
-% Normalise image if it is of type uint8
-if strmatch(class(image),'uint8')
-    image = rescale(image);
-end
+% Validate and prepare threshold array for each decomposition level
+Options.Threshold = iValidateThresholdLength(Options.Threshold, Options.Level);
 
-numCells = size(masks, 3); % Determine the number of detected cells
-maskIms = masks .* image(:,:,:); % Apply masks to isolate cell regions
-
-pixeltoLengthRatio=1; % micrometers/pixel ratio
-
-% Compute the area of each cell in micrometers squared
-Area = squeeze(sum(masks,1:2)) * pixeltoLengthRatio^2; % Total number of pixels per mask times constant
-Confluency = sum(Area) ./ (size(image, 1)*size(image, 2));
-
-
-Area = table(Area);
-
-Confluency = repmat(Confluency, [height(Area), 1]);
-Confluency = table(Confluency);
-
-% Pre-allocation of data structures for improved computational speed
-Perimeter = zeros(numCells, 1);
-BoundingBoxHeight = zeros(numCells, 1);
-BoundingBoxWidth = zeros(numCells, 1);
-BoundingBoxX = zeros(numCells, 1);
-BoundingBoxY = zeros(numCells, 1);
-scoresCells = zeros(numCells, 1);
-
-for i = 1:numCells
-    % Compute perimeter of the cell mask
-    Perimeter(i, 1) = sum(bwperim(masks(:,:,i)),"all");
-
-    % Compute Feret diameter
-    FeretDiameter(i,:) = bwferet(masks(:,:,i));
-
-    % Compute region properties: Eccentricity, Circularity, Solidity
-    ShapeProps(i,:) = regionprops(masks(:,:,i), "Eccentricity", "Circularity", "Solidity");
-    
-
-
-end
-
-% Convert structures to tables
-ShapeProps = struct2table(ShapeProps);
-Perimeter = table(Perimeter);
-BoundingBoxTable = table(boundingBoxes(:,1),boundingBoxes(:,2),boundingBoxes(:,3),boundingBoxes(:,4),'VariableNames', ["Bounding Box X", "Bounding Box Y", "Bounding Box Width", "Bounding Box Height"] );
-if size(scores,1)==size(boundingBoxes,1)
-ScoresTable = table(scores);
+% Convert scalar threshold to array for consistent processing across levels
+if isscalar(Options.Threshold)
+    thresholds = ones(1, Options.Level) * Options.Threshold;
 else
-ScoresTable = table(zeros(size(boundingBoxes,1), 1));
+    thresholds = Options.Threshold;
 end
 
-% Convert diameters to micrometers (but not coordinates in the image)
-FeretDiameter{:,1} = FeretDiameter{:,1} * pixeltoLengthRatio;
+%% Forward DWT Decomposition and Thresholding
+% Perform multi-level DWT decomposition, applying soft thresholding to detail coefficients
+% at each level to remove noise while preserving important image features
 
-% Phase Contrast Intensity stats for each mask
-[PCIstats, IntensityDistStats] = IntensityStats(maskIms);
+coeffs = cell(Options.Level, 4);  % Storage for coefficients: [cA, cH, cV, cD]
 
-% Compute normalised weighted centroid using bounding boxes
-[NWCx, NWCy] = weightedCentroid(maskIms, boundingBoxes);
-NWC = table([NWCx NWCy]);
-NWC.Properties.VariableNames = "Normalised Weighted Centroid";
-
-% Compute aspect ratio from bounding boxes
-AspectRatio = boundingBoxes(:,3)./boundingBoxes(:,4);
-AspectRatio = table(AspectRatio);
-AspectRatio.Properties.VariableNames = "Aspect Ratio";
-
-% Renaming IntensityDistStats variable names
-IntensityDistStats.Properties.VariableNames = ["Standard Deviation", "Skewness", "Kurtosis"];
-
-% Renaming BoundingBoxTable variable names
-%BoundingBoxTable.Properties.VariableNames = ["Bounding Box X", "Bounding Box Y", "Bounding Box Width", "Bounding Box Height"];
-
-% Renaming ScoresTable variable names
-ScoresTable.Properties.VariableNames = ["Confidence"];
-
-% Combine all extracted features into a single table
-extractedTable = horzcat(ScoresTable, Area, Perimeter, BoundingBoxTable, Confluency, AspectRatio, PCIstats, IntensityDistStats, NWC, ShapeProps, FeretDiameter);
-
-end
-%%
-
-
-function [PCIstats, IntensityDistStats] = IntensityStats(maskIms)
-Intensities = reshape(maskIms, [], size(maskIms,3), 1);
-for i=[1:size(maskIms,3)]
+for level = 1:Options.Level
+    % Perform 2D DWT on image (level 1) or approximation coefficients (higher levels)
+    if level == 1
+        [cA, cH, cV, cD] = dwt2(im, Options.Wavelet);
+    else
+        [cA, cH, cV, cD] = dwt2(cA, Options.Wavelet);
+    end
     
-    ins = Intensities(:,i);
-    ins = ins(ins ~= 0); %remove 0 values
-    ins = sort(ins);
-
-    Mean(i,:) = mean(ins);
-    Min(i,:) = min(ins);
-    Max(i,:) = max(ins);
-    Intensity5Percentile(i,:) = ins(ceil(0.05*length(ins))); %5th percentile
-    Intensity95Percentile(i,:) = ins(ceil(0.95*length(ins))); %95th percentile
-
-    Skewness(i,:) = skewness(ins);
-    Kurtosis(i,:) = kurtosis(ins);
-    STDeviation(i,:) = std(ins);
+    % Calculate adaptive thresholds based on maximum coefficient values
+    % This ensures threshold scales appropriately with signal strength
+    current_threshold = thresholds(level);
+    cH_threshold = current_threshold * max(abs(cH(:)));
+    cV_threshold = current_threshold * max(abs(cV(:)));
+    cD_threshold = current_threshold * max(abs(cD(:)));
     
+    % Store coefficients: approximation (unchanged) and thresholded details
+    coeffs{level, 1} = cA;                                    % Approximation coefficients (preserved)
+    coeffs{level, 2} = wthresh(cH, 's', cH_threshold);       % Horizontal detail (soft thresholded)
+    coeffs{level, 3} = wthresh(cV, 's', cV_threshold);       % Vertical detail (soft thresholded)
+    coeffs{level, 4} = wthresh(cD, 's', cD_threshold);       % Diagonal detail (soft thresholded)
 end
 
-    PCIstats = table(Mean, Min, Max, Intensity5Percentile, Intensity95Percentile);
-    IntensityDistStats = table(STDeviation, Skewness, Kurtosis);
+%% Inverse DWT Reconstruction
+% Reconstruct the denoised image by performing inverse DWT from highest
+% to lowest decomposition level using the thresholded coefficients
+
+% Start reconstruction from the deepest approximation coefficients
+cA_reconstructed = coeffs{Options.Level, 1};
+
+% Reconstruct from highest level down to level 2
+for level = Options.Level:-1:2
+    % Retrieve thresholded detail coefficients for current level
+    cH = coeffs{level, 2};
+    cV = coeffs{level, 3};
+    cD = coeffs{level, 4};
+    
+    % Ensure dimensional consistency between approximation and detail coefficients
+    % This handles potential size mismatches due to image dimensions
+    [cA_reconstructed] = adjustCoefficientSizes(cA_reconstructed, cD);
+    
+    % Perform inverse DWT to get approximation for next level up
+    cA_reconstructed = idwt2(cA_reconstructed, cH, cV, cD, Options.Wavelet);
+    
+    % Store reconstructed approximation for potential intermediate access
+    coeffs{level-1, 1} = cA_reconstructed;
+end
+
+% Final reconstruction: convert level 1 coefficients back to image domain
+cA = coeffs{1, 1};
+cH = coeffs{1, 2};
+cV = coeffs{1, 3};
+cD = coeffs{1, 4};
+
+% Final size adjustment before image reconstruction
+[cA] = adjustCoefficientSizes(cA, cD);
+
+% Reconstruct the final denoised image
+im = idwt2(cA, cH, cV, cD, Options.Wavelet);
 
 end
 
+function coeff_adjusted = adjustCoefficientSizes(coeff_a, coeff_d)
+% ADJUSTCOEFFICIENTSIZES Ensures coefficient matrices have compatible dimensions
+% Removes excess rows/columns from approximation coefficients to match detail coefficients
+    
+    coeff_adjusted = coeff_a;
+    
+    [a_rows, a_cols] = size(coeff_a);
+    [d_rows, d_cols] = size(coeff_d);
+    
+    % Adjust columns if sizes don't match
+    if a_cols ~= d_cols
+        coeff_adjusted(:, a_cols) = [];
+    end
+    
+    % Adjust rows if sizes don't match  
+    if a_rows ~= d_rows
+        coeff_adjusted(a_rows, :) = [];
+    end
+end
 
-function [NWCx, NWCy] = weightedCentroid(maskIms, bbox);
-
-sizeX = size(maskIms,2);
-sizeY = size(maskIms,1);
-
-[X Y] = meshgrid(1:sizeX, 1:sizeY);
-
-%find weighted coordinate for intensity in each mask
-WCx = squeeze(sum(maskIms .* X, 1:2)./sum(maskIms, 1:2)); 
-WCy = squeeze((sum(maskIms .* Y, 1:2))./sum(maskIms, 1:2)); 
-%use bounding box values to find position relative to cell itself, normalize by the size of the bounding box
-NWCx = (WCx - bbox(:,1))./bbox(:,3);
-NWCy = (WCy - bbox(:,2))./bbox(:,4);
-
+function thresholds = iValidateThresholdLength(thresholds, levels)
+% IVALIDATETHRESHOLDLENGTH Validates and formats threshold parameter
+% Ensures threshold input is either scalar or vector matching decomposition levels
+    
+    [r, c] = size(thresholds);
+    
+    % Handle case where user provides column vector instead of row vector
+    if ~(r==1) && (c==1)
+        thresholds = thresholds';
+        [r, c] = size(thresholds);  % Update dimensions after transpose
+    end
+    
+    % Validate that threshold dimensions are acceptable
+    valid_scalar = (r==1) && (c==1);                    % Single threshold for all levels
+    valid_row_vector = (r==1) && (c==levels);           % One threshold per level (row)
+    valid_col_vector = (r==levels) && (c==1);           % One threshold per level (column)
+    
+    if ~(valid_scalar || valid_row_vector || valid_col_vector)
+        error('Thresholds must be of size (1,1) or (1,levels) or (levels,1)');
+    end
 end

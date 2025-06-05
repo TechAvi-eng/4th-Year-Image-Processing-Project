@@ -1,40 +1,80 @@
 function [masks labels scores boxes] = segmentCells(net, Image, Options)
-% SEGMENTCELLS De-noises image via DWT-thresholding and uses a Mask R-CNN network to segment cells in an image
-    arguments %checks and default values
-        net MRCNN %classification network input
-        Image = []; %image to be classified
-        Options.Denoise (1,1) logical =1; %on-off option for denoising process
-        Options.Wavelet char = 'db5' %wavelet to use in denoising
-        Options.Level (1,1) {mustBeInteger, mustBeReal} = 4 %levels of decomposition in de-noising
-        Options.DWTThreshold {mustBeGreaterThanOrEqual(Options.DWTThreshold, 0), mustBeLessThan(Options.DWTThreshold, 1), mustBeReal(Options.DWTThreshold)}= 0.02; %threshold for decomposition
-        Options.SegmentThreshold (1,1) {mustBeGreaterThanOrEqual(Options.SegmentThreshold, 0), mustBeLessThan(Options.SegmentThreshold, 1), mustBeReal(Options.SegmentThreshold)}= 0.5; %segmentation confidence threshold for MRCNN results
-        Options.NumstrongestRegions (1,1) = 5000; %number of regions to take forward from RPN
-        Options.SelectStrongest logical = 1; 
-        Options.MinSize (1,2) = [2 2]; %minimum segmenteed object size
-        Options.MaxSize (1,2) = [200 200]; %minimum segmenteed object size
-        Options.ShowMasks (1,1) logical = 0; %plot showing masks
-        Options.ShowScores (1,1) logical = 0; %add scores to plot
-        Options.ExecutionEnvironment char = 'cpu'; %execution environment, cpu or GPU
-    end
+% SEGMENTCELLS Performs cell segmentation using optional DWT denoising and Mask R-CNN
+%
+% This function provides a complete pipeline for cell segmentation in microscopy images:
+% 1. Optional DWT-based denoising to reduce noise while preserving cell boundaries
+% 2. Image preprocessing (rescaling to [0,1] range)
+% 3. Mask R-CNN inference for instance segmentation
+% 4. Optional visualization of results with masks and confidence scores
+%
+% Outputs:
+%   masks  - Binary masks for each detected cell (H x W x N)
+%   labels - Class labels for each detection
+%   scores - Confidence scores for each detection [0,1]
+%   boxes  - Bounding boxes in [x y width height] format
 
-if Options.Denoise==1 %apply denoising
-    Image = DWT_Denoise(Image, "Level",Options.Level,"Threshold",Options.DWTThreshold,"Wavelet",Options.Wavelet);
+arguments % Input validation and default parameter values
+    net MRCNN                                                              % Pre-trained Mask R-CNN network
+    Image = [];                                                            % Input image to segment
+    Options.Denoise (1,1) logical = 1;                                    % Enable/disable DWT denoising preprocessing
+    Options.Wavelet char = 'db5'                                          % Wavelet type for denoising (Daubechies 5)
+    Options.Level (1,1) {mustBeInteger, mustBeReal} = 4                   % Decomposition levels for DWT denoising
+    Options.DWTThreshold {mustBeGreaterThanOrEqual(Options.DWTThreshold, 0), ...
+                         mustBeLessThan(Options.DWTThreshold, 1), ...
+                         mustBeReal(Options.DWTThreshold)} = 0.02;         % Threshold factor for DWT denoising
+    Options.SegmentThreshold (1,1) {mustBeGreaterThanOrEqual(Options.SegmentThreshold, 0), ...
+                                   mustBeLessThan(Options.SegmentThreshold, 1), ...
+                                   mustBeReal(Options.SegmentThreshold)} = 0.5;  % Confidence threshold for accepting detections
+    Options.NumstrongestRegions (1,1) = 5000;                            % Max number of region proposals from RPN
+    Options.SelectStrongest logical = 1;                                   % Whether to select only strongest detections
+    Options.MinSize (1,2) = [2 2];                                       % Minimum object size [height width] in pixels
+    Options.MaxSize (1,2) = [200 200];                                   % Maximum object size [height width] in pixels
+    Options.ShowMasks (1,1) logical = 0;                                 % Display segmentation masks overlay
+    Options.ShowScores (1,1) logical = 0;                                % Display bounding boxes with confidence scores
+    Options.ExecutionEnvironment char = 'cpu';                           % Computation device: 'cpu' or 'gpu'
 end
 
-Image = rescale(Image); %scale [0,1] to pass to Mask R CNN Network
-[masks,labels,scores,boxes] = segmentObjects(net,Image,Threshold=Options.SegmentThreshold,NumStrongestRegions=Options.NumstrongestRegions, SelectStrongest=Options.SelectStrongest, MinSize=Options.MinSize,MaxSize=Options.MaxSize, ExecutionEnvironment=Options.ExecutionEnvironment);
+%% Preprocessing: Optional Denoising
+% Apply DWT-based denoising if enabled to reduce noise while preserving cell edges
+if Options.Denoise == 1
+    Image = DWT_Denoise(Image, "Level", Options.Level, "Threshold", Options.DWTThreshold, "Wavelet", Options.Wavelet);
+end
 
-if Options.ShowMasks==1 %display masks
+%% Image Normalization for Neural Network Input
+% Rescale image intensities to [0,1] range as required by Mask R-CNN
+Image = rescale(Image);
+
+%% Mask R-CNN Inference
+% Perform instance segmentation using the pre-trained network
+% Returns masks, class labels, confidence scores, and bounding boxes
+[masks, labels, scores, boxes] = segmentObjects(net, Image, ...
+    Threshold=Options.SegmentThreshold, ...
+    NumStrongestRegions=Options.NumstrongestRegions, ...
+    SelectStrongest=Options.SelectStrongest, ...
+    MinSize=Options.MinSize, ...
+    MaxSize=Options.MaxSize, ...
+    ExecutionEnvironment=Options.ExecutionEnvironment);
+
+%% Visualization (Optional)
+% Display segmentation results if requested
+if Options.ShowMasks == 1
+    % Create overlay image with colored masks
     if(isempty(masks))
+        % No detections found - show original image
         overlayedImage = Image(:,:,1);
     else
-        overlayedImage = insertObjectMask(Image(:,:,1), masks,Color=lines(size(masks, 3)) );
+        % Overlay masks with different colors for each detected cell
+        overlayedImage = insertObjectMask(Image(:,:,1), masks, Color=lines(size(masks, 3)));
     end
     
+    % Display the overlayed image
     figure, imshow(overlayedImage)
-    if Options.ShowScores==1 %display bounding boxes and confidence scores [0,1]
-        showShape("rectangle", gather(boxes), "Label", scores, "LineColor",'r');
+    
+    % Optionally add bounding boxes and confidence scores
+    if Options.ShowScores == 1
+        % Draw bounding boxes with confidence scores as labels
+        showShape("rectangle", gather(boxes), "Label", scores, "LineColor", 'r');
     end
-
+end
 
 end

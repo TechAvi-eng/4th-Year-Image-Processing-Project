@@ -79,3 +79,8 @@ figure, imshow(resultImage)
 
 % Optional: Show bounding boxes with confidence scores
 %showShape("rectangle", gather(boundingBoxes), "Label", confidenceScores, "LineColor",'r')
+
+
+%% Test Function with Pre-Processing
+
+segmentCells(net, im, "ShowMasks", 1)
