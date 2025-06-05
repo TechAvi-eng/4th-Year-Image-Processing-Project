@@ -11,11 +11,6 @@ function extractedTable = ExtractFeatures(image, masks, boundingBoxes, scores, p
 % Requires ammending once the CNN output/function input has the scores
 % added.
 
-% Multiple image
-% Add functionality to extend analysis for multiple images (i.e. dataset
-% input). Yigit -- can this function be run in a loop for each masked image
-% outputted by the CNN?
-
 
 
 arguments
@@ -38,7 +33,13 @@ pixeltoLengthRatio=1; % micrometers/pixel ratio
 
 % Compute the area of each cell in micrometers squared
 Area = squeeze(sum(masks,1:2)) * pixeltoLengthRatio^2; % Total number of pixels per mask times constant
+Confluency = sum(Area) ./ (size(image, 1)*size(image, 2));
+
+
 Area = table(Area);
+
+Confluency = repmat(Confluency, [height(Area), 1]);
+Confluency = table(Confluency);
 
 % Pre-allocation of data structures for improved computational speed
 Perimeter = zeros(numCells, 1);
@@ -95,10 +96,10 @@ IntensityDistStats.Properties.VariableNames = ["Standard Deviation", "Skewness",
 %BoundingBoxTable.Properties.VariableNames = ["Bounding Box X", "Bounding Box Y", "Bounding Box Width", "Bounding Box Height"];
 
 % Renaming ScoresTable variable names
-ScoresTable.Properties.VariableNames = ["Scores"];
+ScoresTable.Properties.VariableNames = ["Confidence"];
 
 % Combine all extracted features into a single table
-extractedTable = horzcat(Area, Perimeter, PCIstats, IntensityDistStats, NWC, ShapeProps, AspectRatio, FeretDiameter, BoundingBoxTable, ScoresTable);
+extractedTable = horzcat(ScoresTable, Area, Perimeter, BoundingBoxTable, Confluency, AspectRatio, PCIstats, IntensityDistStats, NWC, ShapeProps, FeretDiameter);
 
 end
 %%
@@ -115,8 +116,8 @@ for i=[1:size(maskIms,3)]
     Mean(i,:) = mean(ins);
     Min(i,:) = min(ins);
     Max(i,:) = max(ins);
-    P5(i,:) = ins(ceil(0.05*length(ins))); %5th percentile
-    P95(i,:) = ins(ceil(0.95*length(ins))); %95th percentile
+    Intensity5Percentile(i,:) = ins(ceil(0.05*length(ins))); %5th percentile
+    Intensity95Percentile(i,:) = ins(ceil(0.95*length(ins))); %95th percentile
 
     Skewness(i,:) = skewness(ins);
     Kurtosis(i,:) = kurtosis(ins);
@@ -124,7 +125,7 @@ for i=[1:size(maskIms,3)]
     
 end
 
-    PCIstats = table(Mean, Min, Max, P5, P95);
+    PCIstats = table(Mean, Min, Max, Intensity5Percentile, Intensity95Percentile);
     IntensityDistStats = table(STDeviation, Skewness, Kurtosis);
 
 end
