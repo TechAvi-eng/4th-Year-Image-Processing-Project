@@ -1,0 +1,1 @@
+This folder contains example files to create a new network, to train it, and test its results. An example job script is also included for UCL's Myriad.

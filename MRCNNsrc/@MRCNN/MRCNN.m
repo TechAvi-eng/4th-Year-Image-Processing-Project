@@ -145,7 +145,7 @@ classdef MRCNN < deep.internal.sdk.LearnableParameterContainer
                 options.InputSize {mustBeNumeric, mustBePositive, mustBeReal, mustBeFinite} = []
                 options.PoolSize (1,2) {mustBeNumeric, mustBePositive, mustBeReal, mustBeFinite} = [14 14]
                 options.MaskPoolSize (1,2) {mustBeNumeric, mustBePositive, mustBeReal, mustBeFinite} = [14 14]
-                options.ModelName {mustBeTextScalar} = 'ResNet50'
+                options.ModelName {mustBeTextScalar} = 'EfficientNet'
                 options.ScaleFactor (1,2) {mustBeNumeric, mustBePositive, mustBeReal, mustBeFinite} = [1 1]/16
             end
             
