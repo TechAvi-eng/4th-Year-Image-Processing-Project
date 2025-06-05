@@ -8,7 +8,7 @@ if(size(im,3)==1)
     im = repmat(im, [1 1 3]);
 end
 
-[im, masks] = resizeImageandMask(im, masks, [528, 704]); %pad to desired size
+[im, masks, bbox] = resizeImageandMask(im, masks, bbox,[528, 704]);
 
 %[im, masks] = augmentImage(im, masks); %random augmentation function
 
