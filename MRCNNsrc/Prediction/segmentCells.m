@@ -25,7 +25,7 @@ arguments % Input validation and default parameter values
     Options.SegmentThreshold (1,1) {mustBeGreaterThanOrEqual(Options.SegmentThreshold, 0), ...
                                    mustBeLessThan(Options.SegmentThreshold, 1), ...
                                    mustBeReal(Options.SegmentThreshold)} = 0.5;  % Confidence threshold for accepting detections
-    Options.NumstrongestRegions (1,1) = 5000;                            % Max number of region proposals from RPN
+    Options.NumstrongestRegions (1,1) = 1000;                            % Max number of region proposals from RPN
     Options.SelectStrongest logical = 1;                                   % Whether to select only strongest detections
     Options.MinSize (1,2) = [2 2];                                       % Minimum object size [height width] in pixels
     Options.MaxSize (1,2) = [200 200];                                   % Maximum object size [height width] in pixels

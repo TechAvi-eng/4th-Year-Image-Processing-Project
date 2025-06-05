@@ -1,5 +1,6 @@
 % Mask R-CNN Test Script
-% Tests network training and inference on a single dataset
+% Tests network training and inference on a single image to confirm changes
+% to basic functions
 
 %% Environment Setup
 clear
@@ -24,7 +25,7 @@ anchorBoxes = [21 21; 21 32; 32 21;...
 
 % Create Mask R-CNN with EfficientNetV2 backbone
 testNet = MRCNN(classNames, anchorBoxes, InputSize=inputSize, ...
-                ScaleFactor=[1 1]/16, ModelName='EfficientNet')
+                ScaleFactor=[1 1]/16, ModelName='ResNet50')
 
 %% Training Options
 trainingOpts = trainingOptions("adam", ...
@@ -51,7 +52,8 @@ trainingOpts = trainingOptions("adam", ...
     ForcedPositiveProposals=false)
 
 %% Load Test Image
-load("SingleDS/label_A172_Phase_A7_1_00d00h00m_2.tif.mat", "im")
+load("A172_Phase_A7_1_00d00h00m_2.mat", "im")
+
 testImage = rescale(im);
 testImage = repmat(testImage, [1 1 1]);
 [testImage, ~] = resizeImageandMask(testImage, [], [528, 704]);
@@ -83,4 +85,4 @@ figure, imshow(resultImage)
 
 %% Test Function with Pre-Processing
 
-segmentCells(net, im, "ShowMasks", 1)
+segmentCells(trainedNet, testImage, "ShowMasks", 1)
