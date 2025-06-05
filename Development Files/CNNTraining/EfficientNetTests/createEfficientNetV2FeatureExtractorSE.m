@@ -1,10 +1,10 @@
 function net = createEfficientNetV2FeatureExtractorSE(inputSize)
     % Create EfficientNetV2-style network with GroupNorm that outputs a feature map
     % with 1/16 scale of the input and 1024 channels
-    % Now enhanced with Squeeze-and-Excitation (SE) blocks and fixed residual connections
+    % Now enhanced with Squeeze-and-Excitation (SE) blocks
 
     if nargin < 1
-        inputSize = [528 704 1]; % Default input size if none is provided
+        inputSize = [512 512 3]; % Default input size if none is provided
     end
 
     lgraph = layerGraph(); % Initialize empty layer graph
@@ -13,7 +13,7 @@ function net = createEfficientNetV2FeatureExtractorSE(inputSize)
     stemLayers = [
         imageInputLayer(inputSize, 'Name', 'Input_data', 'Normalization', 'none') % Input layer
         convolution2dLayer(3, 64, 'Stride', 2, 'Padding', 'same', 'Name', 'conv1', 'BiasLearnRateFactor', 0, 'BiasInitializer', 'zeros') % Conv layer with downsampling
-        groupNormalizationLayer(calculateNumGroups(64), 'Name', 'stem_gn') % Group normalization
+        groupNormalizationLayer(calculateNumGroups(32), 'Name', 'stem_gn') % Group normalization
         swishLayer('Name', 'stem_swish') % Swish activation
     ];
 
@@ -30,13 +30,12 @@ function net = createEfficientNetV2FeatureExtractorSE(inputSize)
     };
 
     prevLayerName = 'stem_swish'; % Track last layer name for connections
-    currentChannels = 64; % Track current channel count (starts with stem output)
 
     % Iterate through stages and add blocks to graph
     for stageIdx = 1:length(blockConfigs)
         config = blockConfigs{stageIdx};
         blockType = config{1};
-        outputChannels = config{2};
+        channels = config{2};
         numLayers = config{3};
         stride = config{4};
         expansion = config{5};
@@ -51,16 +50,13 @@ function net = createEfficientNetV2FeatureExtractorSE(inputSize)
             % Add appropriate block type
             if strcmp(blockType, 'fused')
                 [lgraph, prevLayerName] = addFusedMBConvBlock(lgraph, prevLayerName, ...
-                    currentChannels, outputChannels, currentStride, expansion, seRatio, ...
+                    channels, currentStride, expansion, seRatio, ...
                     sprintf('stage%d_block%d', stageIdx, blockIdx));
             else
                 [lgraph, prevLayerName] = addMBConvBlock(lgraph, prevLayerName, ...
-                    currentChannels, outputChannels, currentStride, expansion, seRatio, ...
+                    channels, currentStride, expansion, seRatio, ...
                     sprintf('stage%d_block%d', stageIdx, blockIdx));
             end
-            
-            % Update current channels
-            currentChannels = outputChannels;
         end
     end
 
@@ -76,9 +72,9 @@ function net = createEfficientNetV2FeatureExtractorSE(inputSize)
     net = dlnetwork(lgraph); % Convert to dlnetwork object
 end
 
-function [lgraph, lastLayerName] = addFusedMBConvBlock(lgraph, inputName, inputChannels, outputChannels, stride, expansion, seRatio, blockName)
+function [lgraph, lastLayerName] = addFusedMBConvBlock(lgraph, inputName, channels, stride, expansion, seRatio, blockName)
     % Add Fused-MBConv block with SE and optional projection and residual connection
-    expanded = outputChannels * expansion;
+    expanded = channels * expansion;
 
     % Main fused convolution layer with Swish activation
     layers = [
@@ -99,12 +95,12 @@ function [lgraph, lastLayerName] = addFusedMBConvBlock(lgraph, inputName, inputC
         lastLayerAfterSE = [blockName '_swish1'];
     end
 
-    % Optional projection layer (1x1 conv) if expanded doesn't match outputChannels
-    if expanded ~= outputChannels
+    % Optional projection layer (1x1 conv) if expansion != 1
+    if expanded ~= channels
         projLayers = [
-            convolution2dLayer(1, outputChannels, 'Stride', 1, 'Padding', 'same', ...
+            convolution2dLayer(1, channels, 'Stride', 1, 'Padding', 'same', ...
                 'Name', [blockName '_project_conv'], 'BiasLearnRateFactor', 0, 'BiasInitializer', 'zeros')
-            groupNormalizationLayer(calculateNumGroups(outputChannels), 'Name', [blockName '_gn2'])
+            groupNormalizationLayer(calculateNumGroups(channels), 'Name', [blockName '_gn2'])
         ];
         
         lgraph = addLayers(lgraph, projLayers);
@@ -114,38 +110,22 @@ function [lgraph, lastLayerName] = addFusedMBConvBlock(lgraph, inputName, inputC
         lastLayerName = lastLayerAfterSE;
     end
 
-    % Add residual connection if stride=1 and channel counts match (or add projection if needed)
-    if stride == 1
-        % Add identity shortcut if channels match
-        if inputChannels == outputChannels
+    % Add residual connection if applicable
+    if stride == 1 && ~strcmp(inputName, 'stem_swish')
+        inputChannels = getChannelsByLayerName(lgraph, inputName);
+        if inputChannels == channels
             lgraph = addLayers(lgraph, additionLayer(2, 'Name', [blockName '_add']));
             lgraph = connectLayers(lgraph, inputName, [blockName '_add/in1']);
-            lgraph = connectLayers(lgraph, lastLayerName, [blockName '_add/in2']);
-            lastLayerName = [blockName '_add']; % Update last layer to addition
-        elseif inputChannels ~= outputChannels
-            % Add projection shortcut if channels don't match
-            shortcutLayers = [
-                convolution2dLayer(1, outputChannels, 'Stride', 1, 'Padding', 'same', ...
-                    'Name', [blockName '_shortcut_conv'], 'BiasLearnRateFactor', 0, 'BiasInitializer', 'zeros')
-                groupNormalizationLayer(calculateNumGroups(outputChannels), 'Name', [blockName '_shortcut_gn'])
-            ];
-            
-            lgraph = addLayers(lgraph, shortcutLayers);
-            lgraph = connectLayers(lgraph, inputName, [blockName '_shortcut_conv']);
-            
-            % Add addition layer to combine main path and shortcut
-            lgraph = addLayers(lgraph, additionLayer(2, 'Name', [blockName '_add']));
-            lgraph = connectLayers(lgraph, [blockName '_shortcut_gn'], [blockName '_add/in1']);
             lgraph = connectLayers(lgraph, lastLayerName, [blockName '_add/in2']);
             lastLayerName = [blockName '_add']; % Update last layer to addition
         end
     end
 end
 
-function [lgraph, lastLayerName] = addMBConvBlock(lgraph, inputName, inputChannels, outputChannels, stride, expansion, seRatio, blockName)
+function [lgraph, lastLayerName] = addMBConvBlock(lgraph, inputName, channels, stride, expansion, seRatio, blockName)
     % Add MBConv block (expand -> depthwise -> SE -> project) with residual
 
-    expanded = inputChannels * expansion;
+    expanded = channels * expansion;
 
     % Expand (1x1)
     expandLayers = [
@@ -179,9 +159,9 @@ function [lgraph, lastLayerName] = addMBConvBlock(lgraph, inputName, inputChanne
     
     % Project (1x1)
     projLayers = [
-        convolution2dLayer(1, outputChannels, 'Stride', 1, 'Padding', 'same', ...
+        convolution2dLayer(1, channels, 'Stride', 1, 'Padding', 'same', ...
             'Name', [blockName '_project_conv'], 'BiasLearnRateFactor', 0, 'BiasInitializer', 'zeros')
-        groupNormalizationLayer(calculateNumGroups(outputChannels), 'Name', [blockName '_gn3'])
+        groupNormalizationLayer(calculateNumGroups(channels), 'Name', [blockName '_gn3'])
     ];
     
     lgraph = addLayers(lgraph, projLayers);
@@ -189,30 +169,14 @@ function [lgraph, lastLayerName] = addMBConvBlock(lgraph, inputName, inputChanne
     
     lastLayerName = [blockName '_gn3'];
 
-    % Add residual connection if stride=1 and channel counts match (or add projection if needed)
-    if stride == 1
-        % Add identity shortcut if channels match
-        if inputChannels == outputChannels
+    % Residual connection
+    if stride == 1 && ~strcmp(inputName, 'stem_swish')
+        inputChannels = getChannelsByLayerName(lgraph, inputName);
+        if inputChannels == channels
             lgraph = addLayers(lgraph, additionLayer(2, 'Name', [blockName '_add']));
             lgraph = connectLayers(lgraph, inputName, [blockName '_add/in1']);
             lgraph = connectLayers(lgraph, lastLayerName, [blockName '_add/in2']);
-            lastLayerName = [blockName '_add']; % Update last layer to addition
-        elseif inputChannels ~= outputChannels
-            % Add projection shortcut if channels don't match
-            shortcutLayers = [
-                convolution2dLayer(1, outputChannels, 'Stride', 1, 'Padding', 'same', ...
-                    'Name', [blockName '_shortcut_conv'], 'BiasLearnRateFactor', 0, 'BiasInitializer', 'zeros')
-                groupNormalizationLayer(calculateNumGroups(outputChannels), 'Name', [blockName '_shortcut_gn'])
-            ];
-            
-            lgraph = addLayers(lgraph, shortcutLayers);
-            lgraph = connectLayers(lgraph, inputName, [blockName '_shortcut_conv']);
-            
-            % Add addition layer to combine main path and shortcut
-            lgraph = addLayers(lgraph, additionLayer(2, 'Name', [blockName '_add']));
-            lgraph = connectLayers(lgraph, [blockName '_shortcut_gn'], [blockName '_add/in1']);
-            lgraph = connectLayers(lgraph, lastLayerName, [blockName '_add/in2']);
-            lastLayerName = [blockName '_add']; % Update last layer to addition
+            lastLayerName = [blockName '_add'];
         end
     end
 end
@@ -263,6 +227,22 @@ function [lgraph, outputName] = addSqueezeExcitationBlock(lgraph, inputName, cha
     outputName = [blockName '_se_apply'];
 end
 
+function output = applyChannelAttention(weights, featureMap)
+    % This function applies channel attention weights to the input feature map
+    % weights: output from sigmoid (batch_size x num_channels)
+    % featureMap: input feature map (height x width x channels x batch_size)
+    
+    % Get dimensions
+    %[h, w, c, n] = size(featureMap);
+    
+    % Reshape weights for broadcasting with feature map
+
+    %weights = reshape(weights, [1, 1, c, n]);
+    
+    % Apply attention via multiplication
+    output = featureMap .* weights;
+end
+
 function numGroups = calculateNumGroups(numChannels)
     % Calculate suitable number of groups for group normalization
     numGroups = min(floor(numChannels / 32), 32);
@@ -271,3 +251,46 @@ function numGroups = calculateNumGroups(numChannels)
         numGroups = numGroups - 1;
     end
 end
+
+function layer = findLayerByName(lgraph, layerName)
+    % Search for a layer in the layer graph by name
+    for i = 1:length(lgraph.Layers)
+        if strcmp(lgraph.Layers(i).Name, layerName)
+            layer = lgraph.Layers(i);
+            return;
+        end
+    end
+    layer = [];
+end
+
+function channels = getChannelsByLayerName(lgraph, layerName)
+    % Get number of output channels from a layer
+    layer = findLayerByName(lgraph, layerName);
+
+    if isa(layer, 'nnet.cnn.layer.ImageInputLayer')
+        channels = layer.InputSize(3);
+    elseif isa(layer, 'nnet.cnn.layer.Convolution2DLayer') || ...
+           isa(layer, 'nnet.cnn.layer.GroupedConvolution2DLayer') || ...
+           isa(layer, 'nnet.cnn.layer.DepthwiseConvolution2DLayer')
+        channels = layer.NumFilters;
+    else
+        % Fallback: recursively check incoming layer
+        incomingLayers = findIncomingLayers(lgraph, layerName);
+        if ~isempty(incomingLayers)
+            channels = getChannelsByLayerName(lgraph, incomingLayers{1});
+        else
+            channels = 0;
+        end
+    end
+end
+
+function incomingLayers = findIncomingLayers(lgraph, layerName)
+    % Return names of layers connected to the input of the given layer
+    incomingLayers = {};
+    for i = 1:size(lgraph.Connections, 1)
+        if strcmp(lgraph.Connections.Destination{i}, layerName)
+            incomingLayers{end+1} = lgraph.Connections.Source{i};
+        end
+    end
+end
+

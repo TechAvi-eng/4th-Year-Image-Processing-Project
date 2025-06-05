@@ -31,15 +31,15 @@ for i = 1:256
 end
 
 %%
-for i = 1:16
+for i = 1:26
 
     d = (ans(:,:,i));
-        
+    
     imagesc(d); colorbar
     title(num2str(i))
-            caxis([0 1])
+            %caxis([0 1])
 
-        pause(0.8)
+        pause(0.5)
 
 end
 

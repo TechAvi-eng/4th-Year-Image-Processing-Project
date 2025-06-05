@@ -36,12 +36,10 @@ for i = length(anchor_heights):-1:1
     hold on;
 end
 axis equal;
-title('K-Means Results', Interpreter='latex');
-%title('Optimized Anchor Boxes', Interpreter='latex');
-xlim([0 107])
-ylim([0 107])
+title('Optimized Anchor Boxes', Interpreter='latex');
+%xlim([0 107])
+%ylim([0 107])
 fontname('CMU Serif')
-fontsize(16, 'points')
 
 
 %%
@@ -57,7 +55,7 @@ abs = [14 14; 14 21; 21 14;...
     32 32; 47 32; 32 47;...
     47 47; 71 47; 47 71;...
     71 71; 107 71; 71 107;...
-    107 107; 107 160; 160 107; 160 160];
+    107 107];
 
  % ABs = [20 20; 20 40; 40 20]*2; %defaults
  % abs = [ABs; ABs*2; ABs*4; ABs*8];

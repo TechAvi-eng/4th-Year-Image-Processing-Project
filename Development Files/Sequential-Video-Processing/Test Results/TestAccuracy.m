@@ -2,7 +2,7 @@ clear
 clc
 close all
 
-load('File2.mat', 'net');
+load('Res101-FINAL.mat', 'net');
 
 
 %%
@@ -28,8 +28,8 @@ clear imA imB
 
 
 %%
-net.OverlapThresholdRPN = 0.2;
-net.OverlapThresholdPrediction=0.2;
+
+net.OverlapThreshold=0.2;
 [Masks Cats Scores Boxes] = segmentCells(net, im(:,:,2), "ShowMasks",true, NumstrongestRegions=Inf, SegmentThreshold=0.1, ShowScores=false);
 
 %%
@@ -61,15 +61,15 @@ tiledlayout(2,1,"TileSpacing","compact")
 
 nexttile
 
-plot(alp, Num/149*100, LineWidth=3, Color='k')
+plot(alp, Num/152*100)
 ylabel('Recall (\%)', interpreter='latex')
-xline(0.15, 'r--', LineWidth=2,Color=[0.6350 0.0780 0.1840])
+xline(0.15, 'r--')
 grid on
 
 nexttile
 
-plot(alp, Time*2, LineWidth=3, Color='k')
-xline(0.15, 'r--', LineWidth=2,Color=[0.6350 0.0780 0.1840])
+plot(alp, Time)
+xline(0.15, 'r--')
 grid on
 
 ylabel('Average Processing Time (s)', interpreter='latex')
