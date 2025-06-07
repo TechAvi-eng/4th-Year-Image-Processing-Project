@@ -118,8 +118,11 @@ AspectRatio.Properties.VariableNames = "Aspect Ratio";
 IntensityDistStats.Properties.VariableNames = ["Standard Deviation", "Skewness", "Kurtosis"];
 ScoresTable.Properties.VariableNames = ["Confidence"];
 
+CellNo = [1:numCells]'
+CellNo = table(CellNo)
+
 % Combine all feature categories into comprehensive output table
-extractedTable = horzcat(ScoresTable, Area, Perimeter, BoundingBoxTable, Confluency, ...
+extractedTable = horzcat(CellNo, ScoresTable, Area, Perimeter, BoundingBoxTable, Confluency, ...
                         AspectRatio, PCIstats, IntensityDistStats, NWC, ShapeProps, FeretDiameter);
 
 end

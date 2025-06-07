@@ -15,6 +15,8 @@ function [tracks, trackingTable] = createTracks(tracks, detections, scores, fram
     %   'SizeWeight' - Weight for size difference in cost calculation (default: 0.2)
     %   'AspectRatioWeight' - Weight for aspect ratio difference in cost calculation (default: 0.2)
     %   'IoUWeight' - Weight for IoU component in cost calculation (default: 0.6)
+    %   'MaxDistance' - Maximum distance for spatial gating (default: inf)
+    %   'PreallocateRows' - Number of rows to preallocate in tracking table (default: 1000)
     %
     % Outputs:
     %   tracks - Updated tracks structure
@@ -31,6 +33,8 @@ function [tracks, trackingTable] = createTracks(tracks, detections, scores, fram
         args.SizeWeight (1,1) double = 0.2
         args.AspectRatioWeight (1,1) double = 0.2
         args.IoUWeight (1,1) double = 0.6
+        args.MaxDistance (1,1) double = inf
+        args.PreallocateRows (1,1) double = 1000
     end
     
     % Validate weights sum to 1
@@ -45,6 +49,7 @@ function [tracks, trackingTable] = createTracks(tracks, detections, scores, fram
     % Extract parameters from arguments
     iouThreshold = args.MinIoU;
     invisibleForTooLong = args.MaxInvisibleCount;
+    maxDistance = args.MaxDistance;
     
     % Initialize tracks if this is the first frame
     if isempty(tracks)
@@ -52,191 +57,395 @@ function [tracks, trackingTable] = createTracks(tracks, detections, scores, fram
                       'totalVisibleCount', {}, 'consecutiveInvisibleCount', {});
         nextId = 1;
     else
-        % Get the maximum ID from existing tracks
-        ids = [tracks.id];
-        if isempty(ids)
+        % Get the maximum ID from existing tracks (vectorized)
+        if isempty([tracks.id])
             nextId = 1;
         else
-            nextId = max(ids) + 1;
+            nextId = max([tracks.id]) + 1;
         end
     end
     
-    % Initialize tracking table if needed
-    if isempty(trackingTable)
-        trackingTable = table('Size', [0 4], ...
+    % Initialize tracking table with preallocation
+    if isempty(trackingTable) || (~istable(trackingTable))
+        trackingTable = table('Size', [args.PreallocateRows 4], ...
                           'VariableTypes', {'double', 'double', 'double', 'cell'}, ...
                           'VariableNames', {'frameID', 'objectID', 'confidence', 'bbox'});
+        trackingTable.Properties.UserData.actualRows = 0; % Keep track of actual rows used
     end
     
-    % Skip association if no current tracks
-    if isempty(tracks)
-        % Create a new track for each detection
-        for i = 1:size(detections, 1)
-            newTrack = struct(...
-                'id', nextId, ...
-                'bbox', detections(i, :), ...
-                'score', scores(i), ...
-                'age', 1, ...
-                'totalVisibleCount', 1, ...
-                'consecutiveInvisibleCount', 0);
+    % Handle empty detections case
+    if isempty(detections)
+        % Vectorized update of all existing tracks
+        if ~isempty(tracks)
+            ages = [tracks.age];
+            invisibleCounts = [tracks.consecutiveInvisibleCount];
             
-            tracks(end+1) = newTrack;
+            % Update all tracks at once
+            ageCell = num2cell(ages + 1);
+            invisibleCell = num2cell(invisibleCounts + 1);
+            [tracks.age] = ageCell{:};
+            [tracks.consecutiveInvisibleCount] = invisibleCell{:};
             
-            % Add to tracking table with the actual confidence score
-            newRow = {frameIdx, nextId, scores(i), {detections(i, :)}};
-            trackingTable = [trackingTable; newRow];
-            
-            nextId = nextId + 1;
+            % Remove dead tracks (vectorized)
+            isDead = [tracks.consecutiveInvisibleCount] >= invisibleForTooLong;
+            tracks = tracks(~isDead);
         end
         return;
     end
     
-    % Calculate combined cost metric between each detection and track
+    % Skip association if no current tracks
+    if isempty(tracks)
+        % Vectorized creation of new tracks
+        numDets = size(detections, 1);
+        ids = nextId:(nextId + numDets - 1);
+        
+        % Create all tracks at once - ensure proper structure array creation
+        tracks = struct([]);  % Initialize empty struct array
+        for i = 1:numDets
+            tracks(i).id = ids(i);
+            tracks(i).bbox = detections(i, :);
+            tracks(i).score = scores(i);
+            tracks(i).age = 1;
+            tracks(i).totalVisibleCount = 1;
+            tracks(i).consecutiveInvisibleCount = 0;
+        end
+        
+        % Add to tracking table efficiently
+        trackingTable = addToTrackingTable(trackingTable, frameIdx, ids, scores, detections);
+        
+        return;
+    end
+    
+    % OPTIMIZATION: Spatial gating - only compute costs for nearby tracks
     numDetections = size(detections, 1);
     numTracks = length(tracks);
-    costMatrix = zeros(numTracks, numDetections);
     
-    for i = 1:numTracks
-        track_bbox = tracks(i).bbox;
-        track_width = track_bbox(3);
-        track_height = track_bbox(4);
-        track_size = track_width * track_height;
-        track_aspect = track_width / track_height;
+    % Extract track centers and detection centers for distance calculation
+    trackBboxes = reshape([tracks.bbox], 4, [])'; % 4 x numTracks -> numTracks x 4
+    trackCenters = trackBboxes(:, 1:2) + trackBboxes(:, 3:4) / 2; % [x + w/2, y + h/2]
+    detCenters = detections(:, 1:2) + detections(:, 3:4) / 2;
+    
+    % Compute pairwise distances (vectorized)
+    distMatrix = pdist2(trackCenters, detCenters);
+    validPairs = distMatrix <= maxDistance;
+    
+    % Initialize cost matrix with high values
+    costMatrix = inf(numTracks, numDetections);
+    
+    % Only compute costs for valid pairs
+    [trackIndices, detIndices] = find(validPairs);
+    
+    if ~isempty(trackIndices)
+        % Vectorized cost computation for valid pairs only
+        trackBboxesValid = trackBboxes(trackIndices, :);
+        detectionsValid = detections(detIndices, :);
         
-        for j = 1:numDetections
-            det_bbox = detections(j, :);
-            det_width = det_bbox(3);
-            det_height = det_bbox(4);
-            det_size = det_width * det_height;
-            det_aspect = det_width / det_height;
-            
-            % Calculate IoU component (lower is better)
-            iou = bboxIoU(track_bbox, det_bbox);
-            iou_cost = 1 - iou;
-            
-            % Calculate size difference component (normalized between 0 and 1)
-            % Using relative size difference: |s1-s2|/max(s1,s2)
-            size_diff = abs(track_size - det_size) / max(track_size, det_size);
-            
-            % Calculate aspect ratio difference component (normalized between 0 and 1)
-            % Using a bounded metric that approaches 1 as ratios diverge
-            aspect_diff = abs(track_aspect - det_aspect) / (1 + abs(track_aspect - det_aspect));
-            
-            % Combine the components with weights
-            costMatrix(i, j) = args.IoUWeight * iou_cost + ...
-                               args.SizeWeight * size_diff + ...
-                               args.AspectRatioWeight * aspect_diff;
-        end
+        % Compute all components vectorized
+        track_sizes = trackBboxesValid(:, 3) .* trackBboxesValid(:, 4);
+        track_aspects = trackBboxesValid(:, 3) ./ trackBboxesValid(:, 4);
+        det_sizes = detectionsValid(:, 3) .* detectionsValid(:, 4);
+        det_aspects = detectionsValid(:, 3) ./ detectionsValid(:, 4);
+        
+        % Vectorized IoU computation
+        ious = bboxIoUVectorized(trackBboxesValid, detectionsValid);
+        iou_costs = 1 - ious;
+        
+        % Vectorized size and aspect ratio differences
+        size_diffs = abs(track_sizes - det_sizes) ./ max(track_sizes, det_sizes);
+        aspect_diffs = abs(track_aspects - det_aspects) ./ (1 + abs(track_aspects - det_aspects));
+        
+        % Combine costs
+        costs = args.IoUWeight * iou_costs + ...
+                args.SizeWeight * size_diffs + ...
+                args.AspectRatioWeight * aspect_diffs;
+        
+        % Assign costs to matrix
+        linearIndices = sub2ind(size(costMatrix), trackIndices, detIndices);
+        costMatrix(linearIndices) = costs;
     end
     
     % Use assignment algorithm
     [assignments, unassignedTracks, unassignedDetections] = ...
         assignDetectionsToTracks(costMatrix, iouThreshold);
     
-    % Update assigned tracks
-    for i = 1:size(assignments, 1)
-        trackIdx = assignments(i, 1);
-        detectionIdx = assignments(i, 2);
+    % Update assigned tracks (vectorized where possible)
+    if ~isempty(assignments)
+        trackIndices = assignments(:, 1);
+        detectionIndices = assignments(:, 2);
         
-        tracks(trackIdx).bbox = detections(detectionIdx, :);
-        tracks(trackIdx).score = scores(detectionIdx);  % Update score
-        tracks(trackIdx).age = tracks(trackIdx).age + 1;
-        tracks(trackIdx).totalVisibleCount = tracks(trackIdx).totalVisibleCount + 1;
-        tracks(trackIdx).consecutiveInvisibleCount = 0;
+        % Update bounding boxes
+        for i = 1:length(trackIndices)
+            tracks(trackIndices(i)).bbox = detections(detectionIndices(i), :);
+            tracks(trackIndices(i)).score = scores(detectionIndices(i));
+            tracks(trackIndices(i)).age = tracks(trackIndices(i)).age + 1;
+            tracks(trackIndices(i)).totalVisibleCount = tracks(trackIndices(i)).totalVisibleCount + 1;
+            tracks(trackIndices(i)).consecutiveInvisibleCount = 0;
+        end
         
-        % Add to tracking table with the actual confidence score
-        newRow = {frameIdx, tracks(trackIdx).id, scores(detectionIdx), {detections(detectionIdx, :)}};
-        trackingTable = [trackingTable; newRow];
+        % Add to tracking table
+        assignedIds = [tracks(trackIndices).id];
+        assignedScores = scores(detectionIndices);
+        assignedDetections = detections(detectionIndices, :);
+        trackingTable = addToTrackingTable(trackingTable, frameIdx, assignedIds, assignedScores, assignedDetections);
     end
     
-    % Update unassigned tracks
-    for i = 1:length(unassignedTracks)
-        idx = unassignedTracks(i);
-        tracks(idx).age = tracks(idx).age + 1;
-        tracks(idx).consecutiveInvisibleCount = tracks(idx).consecutiveInvisibleCount + 1;
-        
-        % Optionally predict new position based on previous motion
-        % (not implemented here, but you could add motion prediction)
-    end
-    
-    % Create new tracks for unassigned detections
-    for i = 1:length(unassignedDetections)
-        detectionIdx = unassignedDetections(i);
-        newTrack = struct(...
-            'id', nextId, ...
-            'bbox', detections(detectionIdx, :), ...
-            'score', scores(detectionIdx), ...  % Store score
-            'age', 1, ...
-            'totalVisibleCount', 1, ...
-            'consecutiveInvisibleCount', 0);
-        
-        tracks(end+1) = newTrack;
-        
-        % Add to tracking table with the actual confidence score
-        newRow = {frameIdx, nextId, scores(detectionIdx), {detections(detectionIdx, :)}};
-        trackingTable = [trackingTable; newRow];
-        
-        nextId = nextId + 1;
-    end
-    
-    % Remove dead tracks that have been invisible for too long
-    isDead = [tracks.consecutiveInvisibleCount] >= invisibleForTooLong;
-    tracks = tracks(~isDead);
-end
-
-% Helper function to compute IoU between two bounding boxes
-function iou = bboxIoU(bbox1, bbox2)
-    % Extract coordinates
-    x1 = bbox1(1); y1 = bbox1(2); w1 = bbox1(3); h1 = bbox1(4);
-    x2 = bbox2(1); y2 = bbox2(2); w2 = bbox2(3); h2 = bbox2(4);
-    
-    % Calculate intersection area
-    xOverlap = max(0, min(x1+w1, x2+w2) - max(x1, x2));
-    yOverlap = max(0, min(y1+h1, y2+h2) - max(y1, y2));
-    intersectionArea = xOverlap * yOverlap;
-    
-    % Calculate union area
-    area1 = w1 * h1;
-    area2 = w2 * h2;
-    unionArea = area1 + area2 - intersectionArea;
-    
-    % Calculate IoU
-    iou = intersectionArea / unionArea;
-end
-
-% Assignment function (simplified version - you can replace with MATLAB's built-in assignDetectionsToTracks)
-function [assignments, unassignedTracks, unassignedDetections] = ...
-        assignDetectionsToTracks(cost, costThreshold)
-    % Initialize outputs
-    assignments = [];
-    unassignedTracks = 1:size(cost, 1);
-    unassignedDetections = 1:size(cost, 2);
-    
-    if isempty(cost)
-        return;
-    end
-    
-    % Find assignments with cost below threshold
-    [m, n] = size(cost);
-    
-    % Use the Hungarian algorithm
-    % Note: You could use MATLAB's built-in assignDetectionsToTracks if you have the Computer Vision Toolbox
-    [assignment, ~] = munkres(cost);
-    
-    % Create assignment pairs where cost is below threshold
-    validIdx = false(m, 1);
-    for i = 1:m
-        if assignment(i) > 0 && cost(i, assignment(i)) < costThreshold
-            validIdx(i) = true;
+    % Update unassigned tracks (vectorized)
+    if ~isempty(unassignedTracks)
+        for i = 1:length(unassignedTracks)
+            idx = unassignedTracks(i);
+            tracks(idx).age = tracks(idx).age + 1;
+            tracks(idx).consecutiveInvisibleCount = tracks(idx).consecutiveInvisibleCount + 1;
         end
     end
     
-    assignments = [find(validIdx), assignment(validIdx)];
+    % Create new tracks for unassigned detections - FIXED: Use vertical concatenation
+    if ~isempty(unassignedDetections)
+        numNewTracks = length(unassignedDetections);
+        newIds = nextId:(nextId + numNewTracks - 1);
+        
+        newDetections = detections(unassignedDetections, :);
+        newScores = scores(unassignedDetections);
+        
+        % Create new tracks structure array properly
+        newTracks = struct([]);  % Initialize empty struct array
+        for i = 1:numNewTracks
+            newTracks(i).id = newIds(i);
+            newTracks(i).bbox = newDetections(i, :);
+            newTracks(i).score = newScores(i);
+            newTracks(i).age = 1;
+            newTracks(i).totalVisibleCount = 1;
+            newTracks(i).consecutiveInvisibleCount = 0;
+        end
+        
+        % FIXED: Use vertical concatenation to append new tracks
+        if isempty(tracks)
+            tracks = newTracks;
+        else
+            tracks = [tracks, newTracks];  % Vertical concatenation
+        end
+        
+        % Add to tracking table
+        trackingTable = addToTrackingTable(trackingTable, frameIdx, newIds, newScores, newDetections);
+    end
+    
+    % Remove dead tracks (vectorized)
+    if ~isempty(tracks)
+        isDead = [tracks.consecutiveInvisibleCount] >= invisibleForTooLong;
+        tracks = tracks(~isDead);
+    end
+end
+
+% Optimized function to add entries to tracking table
+function trackingTable = addToTrackingTable(trackingTable, frameIdx, ids, scores, detections)
+    numEntries = length(ids);
+    currentRows = trackingTable.Properties.UserData.actualRows;
+    
+    % Check if we need to expand the table
+    if currentRows + numEntries > height(trackingTable)
+        % Double the table size
+        newSize = max(height(trackingTable) * 2, currentRows + numEntries);
+        emptyRows = newSize - height(trackingTable);
+        
+        emptyTable = table('Size', [emptyRows 4], ...
+                          'VariableTypes', {'double', 'double', 'double', 'cell'}, ...
+                          'VariableNames', {'frameID', 'objectID', 'confidence', 'bbox'});
+        trackingTable = [trackingTable; emptyTable];
+    end
+    
+    % Add new entries
+    rowIndices = (currentRows + 1):(currentRows + numEntries);
+    trackingTable.frameID(rowIndices) = frameIdx;
+    trackingTable.objectID(rowIndices) = ids;
+    trackingTable.confidence(rowIndices) = scores;
+    
+    % Convert detections to cell array efficiently
+    bboxCell = mat2cell(detections, ones(numEntries, 1), 4);
+    trackingTable.bbox(rowIndices) = bboxCell;
+    
+    % Update actual row count
+    trackingTable.Properties.UserData.actualRows = currentRows + numEntries;
+end
+
+% Vectorized IoU computation
+function ious = bboxIoUVectorized(bboxes1, bboxes2)
+    % Extract coordinates
+    x1 = bboxes1(:, 1); y1 = bboxes1(:, 2); w1 = bboxes1(:, 3); h1 = bboxes1(:, 4);
+    x2 = bboxes2(:, 1); y2 = bboxes2(:, 2); w2 = bboxes2(:, 3); h2 = bboxes2(:, 4);
+    
+    % Calculate intersection area (vectorized)
+    xOverlap = max(0, min(x1 + w1, x2 + w2) - max(x1, x2));
+    yOverlap = max(0, min(y1 + h1, y2 + h2) - max(y1, y2));
+    intersectionArea = xOverlap .* yOverlap;
+    
+    % Calculate union area (vectorized)
+    area1 = w1 .* h1;
+    area2 = w2 .* h2;
+    unionArea = area1 + area2 - intersectionArea;
+    
+    % Calculate IoU with division by zero protection
+    ious = zeros(size(unionArea));
+    validUnion = unionArea > 0;
+    ious(validUnion) = intersectionArea(validUnion) ./ unionArea(validUnion);
+end
+
+% Helper function to compute IoU between two bounding boxes (kept for backward compatibility)
+function iou = bboxIoU(bbox1, bbox2)
+    ious = bboxIoUVectorized(bbox1, bbox2);
+    iou = ious(1);
+end
+
+% Optimized Hungarian Algorithm with early termination
+function [assignments, unassignedTracks, unassignedDetections] = ...
+        assignDetectionsToTracks(cost, costThreshold)
+    
+    [m, n] = size(cost);
+    
+    % Early exit for empty cost matrix
+    if m == 0 || n == 0
+        assignments = [];
+        unassignedTracks = 1:m;
+        unassignedDetections = 1:n;
+        return;
+    end
+    
+    % OPTIMIZATION: Use greedy assignment for small problems
+    if m * n <= 100  % Threshold for greedy vs Hungarian
+        assignment = greedyAssignment(cost);
+    else
+        assignment = hungarianAlgorithm(cost);
+    end
+    
+    % Create assignment pairs where cost is below threshold
+    validAssignments = [];
+    for i = 1:m
+        if assignment(i) > 0 && assignment(i) <= n && cost(i, assignment(i)) < costThreshold
+            validAssignments = [validAssignments; i, assignment(i)];
+        end
+    end
+    
+    assignments = validAssignments;
     
     % Find unassigned tracks and detections
-    assignedTracks = assignments(:, 1);
-    unassignedTracks = setdiff(1:m, assignedTracks)';
+    if ~isempty(assignments)
+        assignedTracks = assignments(:, 1);
+        assignedDetections = assignments(:, 2);
+    else
+        assignedTracks = [];
+        assignedDetections = [];
+    end
     
-    assignedDetections = assignments(:, 2);
+    unassignedTracks = setdiff(1:m, assignedTracks)';
     unassignedDetections = setdiff(1:n, assignedDetections)';
+end
+
+% Fast greedy assignment for small problems
+function assignment = greedyAssignment(costMatrix)
+    [m, n] = size(costMatrix);
+    assignment = zeros(m, 1);
+    usedCols = false(n, 1);
+    
+    % Sort all costs and process in order
+    [sortedCosts, indices] = sort(costMatrix(:));
+    [rows, cols] = ind2sub([m, n], indices);
+    
+    for i = 1:length(sortedCosts)
+        r = rows(i);
+        c = cols(i);
+        
+        if assignment(r) == 0 && ~usedCols(c)
+            assignment(r) = c;
+            usedCols(c) = true;
+        end
+    end
+end
+
+% Optimized Hungarian Algorithm
+function assignment = hungarianAlgorithm(costMatrix)
+    [m, n] = size(costMatrix);
+    
+    % Make the matrix square by padding with large values if necessary
+    maxCost = max(costMatrix(:));
+    if isempty(maxCost) || ~isfinite(maxCost)
+        maxCost = 1000;
+    end
+    
+    if m < n
+        costMatrix = [costMatrix; repmat(maxCost + 1, n - m, n)];
+    elseif n < m
+        costMatrix = [costMatrix, repmat(maxCost + 1, m, m - n)];
+    end
+    
+    [rows, cols] = size(costMatrix);
+    
+    % Step 1: Subtract row minima (vectorized)
+    rowMin = min(costMatrix, [], 2);
+    costMatrix = costMatrix - rowMin;
+    
+    % Step 2: Subtract column minima (vectorized)
+    colMin = min(costMatrix, [], 1);
+    costMatrix = costMatrix - colMin;
+    
+    % Initialize assignment
+    assignment = zeros(rows, 1);
+    
+    % Simple assignment finding (optimized for typical tracking scenarios)
+    for maxIter = 1:rows
+        % Find assignments
+        assignment = findSimpleAssignment(costMatrix);
+        
+        % Check if we have enough assignments
+        numAssigned = sum(assignment > 0);
+        if numAssigned >= min(rows, cols)
+            break;
+        end
+        
+        % Create additional zeros
+        costMatrix = createAdditionalZerosOptimized(costMatrix, assignment);
+    end
+    
+    % Return only the first m assignments
+    assignment = assignment(1:m);
+    assignment(assignment > n) = 0;
+end
+
+function assignment = findSimpleAssignment(costMatrix)
+    [rows, cols] = size(costMatrix);
+    assignment = zeros(rows, 1);
+    usedCols = false(cols, 1);
+    
+    % Find zeros and assign greedily
+    [zeroRows, zeroCols] = find(costMatrix == 0);
+    
+    for i = 1:length(zeroRows)
+        r = zeroRows(i);
+        c = zeroCols(i);
+        
+        if assignment(r) == 0 && ~usedCols(c)
+            assignment(r) = c;
+            usedCols(c) = true;
+        end
+    end
+end
+
+function costMatrix = createAdditionalZerosOptimized(costMatrix, assignment)
+    [rows, cols] = size(costMatrix);
+    
+    % Find covered rows and columns
+    rowCovered = assignment > 0;
+    colCovered = false(cols, 1);
+    colCovered(assignment(assignment > 0)) = true;
+    
+    % Find minimum uncovered value
+    uncoveredMask = ~rowCovered & ~colCovered';
+    uncoveredElements = costMatrix(uncoveredMask);
+    
+    if isempty(uncoveredElements)
+        return;
+    end
+    
+    minUncovered = min(uncoveredElements);
+    
+    % Apply the Hungarian step (vectorized)
+    costMatrix = costMatrix - minUncovered .* (~rowCovered);
+    costMatrix = costMatrix + minUncovered .* (rowCovered & colCovered');
 end
