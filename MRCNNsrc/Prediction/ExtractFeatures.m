@@ -97,6 +97,7 @@ end
 
 % Convert Feret diameter to physical units (micrometers)
 FeretDiameter{:,1} = FeretDiameter{:,1} * pixeltoLengthRatio;
+FeretDiameter.Properties.VariableNames = ["Max Diameter", "Max Angle", "Max Coordinates"]
 
 %% Intensity Feature Extraction
 % Compute comprehensive intensity statistics for each segmented cell
@@ -118,8 +119,8 @@ AspectRatio.Properties.VariableNames = "Aspect Ratio";
 IntensityDistStats.Properties.VariableNames = ["Standard Deviation", "Skewness", "Kurtosis"];
 ScoresTable.Properties.VariableNames = ["Confidence"];
 
-CellNo = [1:numCells]'
-CellNo = table(CellNo)
+CellNo = [1:numCells]';
+CellNo = table(CellNo);
 
 % Combine all feature categories into comprehensive output table
 extractedTable = horzcat(CellNo, ScoresTable, Area, Perimeter, BoundingBoxTable, Confluency, ...
