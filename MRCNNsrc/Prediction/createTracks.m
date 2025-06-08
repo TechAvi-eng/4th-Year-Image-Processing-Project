@@ -309,7 +309,7 @@ function [assignments, unassignedTracks, unassignedDetections] = ...
     end
     
     % OPTIMIZATION: Use greedy assignment for small problems
-    if m * n <= 100  % Threshold for greedy vs Hungarian
+    if m * n <= 1000  % Threshold for greedy vs Hungarian
         assignment = greedyAssignment(cost);
     else
         assignment = hungarianAlgorithm(cost);
