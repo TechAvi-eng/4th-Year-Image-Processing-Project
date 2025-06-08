@@ -53,11 +53,7 @@ Confluency = table(Confluency);
 
 % Pre-allocate arrays for computational efficiency
 Perimeter = zeros(numCells, 1);
-BoundingBoxHeight = zeros(numCells, 1);
-BoundingBoxWidth = zeros(numCells, 1);
-BoundingBoxX = zeros(numCells, 1);
-BoundingBoxY = zeros(numCells, 1);
-scoresCells = zeros(numCells, 1);
+
 
 %% Per-Cell Feature Computation
 for i = 1:max(numCells,1);
@@ -97,7 +93,7 @@ end
 
 % Convert Feret diameter to physical units (micrometers)
 FeretDiameter{:,1} = FeretDiameter{:,1} * pixeltoLengthRatio;
-FeretDiameter.Properties.VariableNames = ["Max Diameter", "Max Angle", "Max Coordinates"]
+FeretDiameter.Properties.VariableNames = ["Max Diameter", "Max Angle", "Max Coordinates"];
 
 %% Intensity Feature Extraction
 % Compute comprehensive intensity statistics for each segmented cell
