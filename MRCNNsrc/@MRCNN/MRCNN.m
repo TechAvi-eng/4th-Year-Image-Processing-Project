@@ -1,7 +1,5 @@
 classdef MRCNN < deep.internal.sdk.LearnableParameterContainer
 
-% Copyright 2021-2023 The MathWorks, Inc.
-
     properties (SetAccess = public, GetAccess = public)
         % Mask R-CNN sub networks
         FeatureExtractionNet
