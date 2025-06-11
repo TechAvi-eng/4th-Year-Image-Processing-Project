@@ -2,7 +2,7 @@ clear
 clc
 close all
 
-load('Res101-FINAL.mat', 'net');
+%load('Res101-FINAL.mat', 'net');
 
 
 %%

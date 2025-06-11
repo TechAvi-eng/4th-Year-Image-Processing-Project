@@ -56,6 +56,9 @@ box on
 grid on
 fontname('CMU Serif')
 fontsize(16, 'points')
+%set(gca, 'YScale', 'log')
+%set(gca, 'XScale', 'log')
+
 
 %%
 close all
