@@ -49,7 +49,7 @@ im=rescale(im);
 im=repmat(im ,[1 1 1]); 
 
 
-[im, ~] = resizeImageandMask(im, [], [528, 704]);
+im = smartResize(im, [528, 704]);
 
 %%
 net.OverlapThresholdRPN = 0.3;
@@ -65,14 +65,14 @@ tic
 % 
 %net.ProposalsOutsideImage='clip';
 %net.MinScore = 0.001;
-     [masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.1,NumStrongestRegions=Inf, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );
+     [masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.5,NumStrongestRegions=1000, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );
 toc
 
 %scores = 1./(1+exp(-scores));
 %  
 % %%
 % imshow(insertObjectMask(im1,masks, Color=lines(size(masks, 3))))
-%%
+
 if(isempty(masks))
     overlayedImage = im(:,:,1);
 else
