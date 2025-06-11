@@ -1,4 +1,4 @@
-# Multires-ML Microscopy
+# Multires ML Microscopy
 
 This is the GitHub repo for the project Advancing Medical Image Analysis through Machine Learning Techniques by Nikhil Dhulashia, Yiğit Doğan, Dhrumil Rajpara, Xingzao Shi, and Luis Casamitjana Ortega under the supervision of Dr. Haqshenas.
  
