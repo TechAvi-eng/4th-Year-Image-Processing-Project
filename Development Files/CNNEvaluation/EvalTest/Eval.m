@@ -3,26 +3,30 @@ clc
 close all
 
 % run image segmentation
-load("NewsetNet.mat", 'net')
-
-%net.OverlapThresholdRPN = 0.3;
+%load("NewsetNet.mat", 'net')
+load('EfficientNet.mat')
+net.OverlapThresholdRPN = 0.3;
 net.OverlapThresholdPrediction = 0.3;
 %net.ScoreThreshold = 0.1;
+net.NumStrongestRegionsPrediction=5000;
+net.NumStrongestRegions=5000;
+net.ClassNames{1} = 'CellA';
+
 %%
 
 
 
-dsTest= fileDatastore("./MidValDSFs", ReadFcn=@(x)TestIMsMATReader(x));
+dsTest= fileDatastore("./Resu/label_BV2_Phase_C4_2_02d00h00m_2.tif.mat", ReadFcn=@(x)TestIMsMATReader(x));
 
 tic
-dsResults= segmentObjects(net, dsTest, "Threshold",0.000001,"MinSize",[2 2],"MaxSize",[80 80],"NumStrongestRegions",1600,"SelectStrongest",true);
+dsResults= segmentObjects(net, dsTest, "Threshold",0.000001,"MinSize",[2 2],"MaxSize",[80 80],"NumStrongestRegions",Inf,"SelectStrongest",true);
 toc
 %% evaluate
 
 
 
-dsResults = fileDatastore("./SegmentObjectResults/", ReadFcn=@(x)SegMATReader(x)); %segmented data
-dsTruth  = fileDatastore("./MidValDSFs", ReadFcn=@(x)TestMATReader(x)); %training data
+dsResults = fileDatastore("./SegmentObjectResults8/", ReadFcn=@(x)SegMATReader(x)); %segmented data
+dsTruth  = fileDatastore("././Resu/label_BV2_Phase_C4_2_02d00h00m_2.tif.mat", ReadFcn=@(x)TestMATReader(x)); %training data
 j=1;
 i=0.5;
 %for i=[0.5:0.05:0.95]
@@ -30,10 +34,10 @@ tic
 metrics = evaluateInstanceSegmentation(dsResults, dsTruth, i,"Verbose",true);
 toc
 
-n="NEWzerothreshmetrics_EFF_"+i+"_.mat";
-cellmetrics{j} = metrics;
-j=j+1;
-save(n)
+% n="NEWzerothreshmetrics_EFF_"+i+"_.mat";
+% cellmetrics{j} = metrics;
+% j=j+1;
+% save(n)
 
 %end
 

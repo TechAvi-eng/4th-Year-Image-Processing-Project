@@ -1,6 +1,6 @@
 <deployment-project plugin="plugin.apptool" plugin-version="1.0">
-  <configuration file="/Users/yigit/Desktop/Stuff/Mechanical Engineering/4YP_Github/App.prj" location="/Users/yigit/Desktop/Stuff/Mechanical Engineering/4YP_Github" name="App" target="target.mlapps" target-name="Package App">
-    <param.appname>App</param.appname>
+  <configuration build-checksum="3251531319" file="/Users/yigit/Desktop/Stuff/Mechanical Engineering/4YP_Github/cellapp.prj" location="/Users/yigit/Desktop/Stuff/Mechanical Engineering/4YP_Github" name="cellapp" target="target.mlapps" target-name="Package App">
+    <param.appname>cellapp</param.appname>
     <param.authnamewatermark />
     <param.email />
     <param.company />
@@ -8,14 +8,14 @@
     <param.icons />
     <param.summary />
     <param.description />
-    <param.screenshot>/private/var/folders/yz/yvvq7_yd353bf20hnh4j3h480000gn/T/tpc428e8b7_c1e5_4723_ae03_41b109cbaeb0.png</param.screenshot>
+    <param.screenshot>/private/var/folders/yz/yvvq7_yd353bf20hnh4j3h480000gn/T/tpa56d0cfc_6d2a_4d9c_b9e0_06a13993934d.png</param.screenshot>
     <param.version>1.0</param.version>
     <param.products.name />
     <param.products.id />
     <param.products.version />
     <param.platforms />
     <param.output>${PROJECT_ROOT}</param.output>
-    <param.guid>bce85913-fcc7-4b76-b537-bd67d4314e1f</param.guid>
+    <param.guid>29c13a6a-96ad-4489-9a63-8a7b9fb7e26b</param.guid>
     <unset>
       <param.authnamewatermark />
       <param.email />
@@ -34,8 +34,16 @@
     <fileset.main>
       <file>${PROJECT_ROOT}/cellapp.mlapp</file>
     </fileset.main>
-    <fileset.depfun />
-    <fileset.resources />
+    <fileset.depfun>
+      <file>${PROJECT_ROOT}/close.png</file>
+      <file>${PROJECT_ROOT}/export.png</file>
+      <file>${PROJECT_ROOT}/nextbutton.png</file>
+      <file>${PROJECT_ROOT}/previousbutton.png</file>
+      <file>${PROJECT_ROOT}/settings.png</file>
+    </fileset.depfun>
+    <fileset.resources>
+      <file>${PROJECT_ROOT}/MRCNNsrc</file>
+    </fileset.resources>
     <fileset.package />
     <build-deliverables>
       <file location="/Users/yigit/Desktop/Stuff/Mechanical Engineering" name="4YP_Github" optional="false">/Users/yigit/Desktop/Stuff/Mechanical Engineering/4YP_Github</file>
