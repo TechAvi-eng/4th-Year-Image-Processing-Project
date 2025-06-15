@@ -11,7 +11,7 @@ function outFeatures = roiAlignPooling (obj, X, boxes, poolSize)
 % poolSize(1)-by-poolSize(2)-by-numFeat-numProposals and format SSCB.
     
     % Scale the boxes to feature coordinates
-
+    boxes = max(boxes, 1);
     boxes(1:4, :, :, :) = ((boxes(1:4,:, :, :)-1 ) .* obj.ScaleFactor(1)) + 0.5;
 
     outFeatures = roialign(X, squeeze(boxes), poolSize, 'ROIScale', 1);
