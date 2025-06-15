@@ -332,15 +332,22 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
 
             [dlRPNScores2, dlRPNReg2] = predict(obj.RegionProposalNet2, dlPooled1, 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
 
-            refinedProposals = applyRegressionToProposals(dlProposals, dlRPNReg2);
+            refinedProposals2 = applyRegressionToProposals(obj, dlProposals, dlRPNReg2);
+
+            dlPooled2 = roiAlignPooling(obj, dlFeatures, refinedProposals2, obj.PoolSize);
+            [dlRPNScores3, dlRPNReg3] = predict(obj.RegionProposalNet2, dlPooled2, 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
 
 
-
-
-    
-
+            refinedProposals3 = applyRegressionToProposals(obj, refinedProposals2, dlRPNReg3);
+            dlPooled3 = roiAlignPooling(obj, dlFeatures, refinedProposals3, obj.PoolSize);
             
-            dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled, dlPooled);
+            if(~obj.PostPoolFeatureExtractionNet.Initialized)
+                obj.PostPoolFeatureExtractionNet = initialize(...
+                                            obj.PostPoolFeatureExtractionNet,...
+                                            dlPooled3, dlPooled3);
+            end
+
+            dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled3, dlPooled3);
     
             % Box regression
             if(~obj.DetectionHeads.Initialized)

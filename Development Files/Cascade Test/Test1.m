@@ -9,6 +9,7 @@ data = preview(ds)
 
 %%
 clc
+
 trainClassNames = ["CellA"];
 imageSizeTrain = [528 704 1];
 
