@@ -154,7 +154,7 @@ classdef MRCNN < deep.internal.sdk.LearnableParameterContainer
             % method.
 
             % Load pre-trained network
-            dir = which('SegmentCells'); %find and load network from path of all files
+            dir = which('MRCNN'); %find and load network from path of all files
             dir = dir(1:end-14);
             data = load([dir+"/NetData/"+options.ModelName+"/dlnetPostFeature.mat"] );
             obj.PostPoolFeatureExtractionNet = data.dlnetPostFeature;
