@@ -6,25 +6,25 @@ Multires-ML-Microscopy is an open-source library written in MATLAB, featurin a f
 Designed for use in biological and medical research environments, the pipeline enables high-throughput and reproducible analysis of cellular morphology, supporting tasks such as drug testing, disease modelling, and cell behaviour studies.
 
 ## Getting help
-Enquiries about the library and questions should be asked on the discxussion page of the GitHub or directed to the team of developers on the GitHub or via email:nikhil.dhulashia.21@ucl.ac.uk, or yigit.dogan.21@ucl.ac.uk
+Enquiries about the library and questions should be asked on the discussion page of the GitHub or directed to the team of developers on the GitHub or via email:nikhil.dhulashia.21@ucl.ac.uk, or yigit.dogan.21@ucl.ac.uk
 
 ## Citation
 If you use Multires-ML-Microscopy in your work, please cite it as follows:
 
 **APA**
 ```
-N Dhulashia1, Y Doğan, D Rajpara1, X Shi1, L Casamitjana Ortega1, R Haqshenas (2025), Multires-ML-Microscopy: Multiresolution Machine Learning based Segmentation and Characterisation of Microscopy Images, https://github.com/USonixGroup/Multires-ML-Microscopy
+N Dhulashia, Y Doğan, D Rajpara1, X Shi, L Casamitjana Ortega, R Haqshenas (2025), Multires-ML-Microscopy: Multiresolution Machine Learning based Segmentation and Characterisation of Microscopy Images, https://github.com/TechAvi-eng/Multires-ML-Microscopy
 ```
 
 **BibTeX**
 ```
 @software{optimuslib,
-author = {N Dhulashia1, Y Doğan1, D Rajpara1, X Shi1, L Casamitjana Ortega1, R Haqshenas },
+author = {N Dhulashia, Y Doğan, D Rajpara, X Shi1, L Casamitjana Ortega, R Haqshenas },
 title = {Multires-ML-Microscopy: Multiresolution Machine Learning based Segmentation and Characterisation of Microscopy Images},
 url = {https://github.com/TechAvi-eng/Multires-ML-Microscopy},
 version = {0.1}
 }
 ```
 ## License
-Multires-ML-Microscopy s licensed under an MIT licence.
+Multires-ML-Microscopy is licensed under an MIT licence.
 Copyright (c) 2025.
