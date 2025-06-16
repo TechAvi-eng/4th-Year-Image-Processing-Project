@@ -1,12 +1,9 @@
-classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
+classdef MRCNN < deep.internal.sdk.LearnableParameterContainer
 
     properties (SetAccess = public, GetAccess = public)
         % Mask R-CNN sub networks
         FeatureExtractionNet
         RegionProposalNet
-        CascadeNet1
-        CascadeNet2
-        CascadeNet3
         PostPoolFeatureExtractionNet
         DetectionHeads
         MaskSegmentationHead
@@ -139,14 +136,14 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
     
     % Constructors
     methods
-        function obj = CascadeRCNN(classNames, anchorBoxes, options)
+        function obj = MRCNN(classNames, anchorBoxes, options)
             arguments
                 classNames {validateClassNames, mustBeUniqueNames} = ''
                 anchorBoxes (:,2){mustBeNumeric, mustBePositive, mustBeReal, mustBeFinite} = []
                 options.InputSize {mustBeNumeric, mustBePositive, mustBeReal, mustBeFinite} = []
                 options.PoolSize (1,2) {mustBeNumeric, mustBePositive, mustBeReal, mustBeFinite} = [14 14]
                 options.MaskPoolSize (1,2) {mustBeNumeric, mustBePositive, mustBeReal, mustBeFinite} = [14 14]
-                options.ModelName {mustBeTextScalar} = 'CEfficientNet'
+                options.ModelName {mustBeTextScalar} = 'EfficientNet'
                 options.ScaleFactor (1,2) {mustBeNumeric, mustBePositive, mustBeReal, mustBeFinite} = [1 1]/16
             end
             
@@ -157,22 +154,14 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             % method.
 
             % Load pre-trained network
-            dir = which('SegmentCells'); %find and load network from path of all files
+            dir = which('MRCNN'); %find and load network from path of all files
             dir = dir(1:end-14);
             data = load([dir+"/NetData/"+options.ModelName+"/dlnetPostFeature.mat"] );
             obj.PostPoolFeatureExtractionNet = data.dlnetPostFeature;
             data = load([dir+"/NetData/"+options.ModelName+"/dlnetFeature.mat"] );
             obj.FeatureExtractionNet = data.dlnetFeature;
             data = load([dir+"/NetData/"+options.ModelName+"/dlnetRPN.mat"] );
-
             obj.RegionProposalNet = data.dlnetRPN;
-            
-            data = load([dir+"/NetData/"+options.ModelName+"/dlnetRPNC.mat"] );
-            obj.CascadeNet1 = data.dlnetRPNC;
-            obj.CascadeNet2 = data.dlnetRPNC;
-            obj.CascadeNet3 = data.dlnetRPNC;
-
-
             data = load([dir+"/NetData/"+options.ModelName+"/dlnetDetectHead.mat"] );
             obj.DetectionHeads = data.dlnetDetectHead;
             data = load([dir+"/NetData/"+options.ModelName+"/dlnetMaskHead.mat"] );
@@ -246,45 +235,18 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
                 numAnchors = size(anchorBoxes,1);
 
                 % update the RPN branch architecture
-                rpnGraph1 = layerGraph(obj.RegionProposalNet);
+                rpnGraph = layerGraph(obj.RegionProposalNet);
                 rpnRegConvNode = 'RPNRegOut';
                 convReg = convolution2dLayer([1 1], numAnchors*4, 'Name', 'RPNRegOut','WeightsInitializer','narrow-normal');
-                rpnGraph1 = replaceLayer(rpnGraph1, rpnRegConvNode, convReg);      
+                
+                rpnGraph = replaceLayer(rpnGraph, rpnRegConvNode, convReg);
 
                 rpnClassConvNode = 'RPNClassOut';
                 convClass = convolution2dLayer([1 1], numAnchors, 'Name', 'RPNClassOut','WeightsInitializer','narrow-normal',BiasInitializer="zeros",BiasLearnRateFactor=0);
-                rpnGraph1 = replaceLayer(rpnGraph1, rpnClassConvNode, convClass);
-
-
-                rpnGraphC = layerGraph(obj.CascadeNet1);
-
-                % Store copies in cell array for easier processing
-                rpnGraphs = {rpnGraphC, rpnGraphC, rpnGraphC};
-                layerNames = {rpnGraphC.Layers.Name};
                 
-                for graphIdx = 1:3
-                    currentGraph = rpnGraphs{graphIdx};
-                    
-                    for layerIdx = 1:length(layerNames)
-                        newLayer = currentGraph.Layers(layerIdx);
-                        newLayer.Name = [layerNames{layerIdx} '_' num2str(graphIdx)];
-                        currentGraph = replaceLayer(currentGraph, layerNames{layerIdx}, newLayer);
-                    end
-                    
-                    rpnGraphs{graphIdx} = currentGraph;
-                end
-                
-                % Extract back to individual variables if needed
-                rpnGraph2 = rpnGraphs{1};
-                rpnGraph3 = rpnGraphs{2};
-                rpnGraph4 = rpnGraphs{3};
+                rpnGraph = replaceLayer(rpnGraph, rpnClassConvNode, convClass);
 
-                obj.RegionProposalNet = dlnetwork(rpnGraph1, 'Initialize', false);
-                obj.CascadeNet1 = dlnetwork(rpnGraph2, 'Initialize', false);
-                obj.CascadeNet2 = dlnetwork(rpnGraph3, 'Initialize', false);
-                obj.CascadeNet3 = dlnetwork(rpnGraph4, 'Initialize', false);
-
-
+                obj.RegionProposalNet = dlnetwork(rpnGraph, 'Initialize', false);
             end
     
             %correct scale factor for rounding when using a shape not
@@ -301,7 +263,7 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
         end
     end
     
-    methods(Access=?CascadeRCNN)
+    methods(Access=?tMRCNN)
 
         % Declare regionproposal method (definition in separate file)
         proposals = regionProposal(obj, regressionBatch, scoresBatch)
@@ -314,18 +276,13 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
         % initialize all sub - dlnetworks
         function obj = initialize(obj)
             
-            dlX = dlarray(rand(obj.InputSize, 'single')*1, 'SSCB');
+            dlX = dlarray(rand(obj.InputSize, 'single')*255, 'SSCB');
 
             dlFeatures = predict(obj.FeatureExtractionNet, dlX);
             
             % predict on RPN
             if(~obj.RegionProposalNet.Initialized)
                 obj.RegionProposalNet = initialize(obj.RegionProposalNet, dlFeatures);
-
-                dlProp = dlarray(rand([14 14 1024 1]), 'SSCB');
-                obj.CascadeNet1 = initialize(obj.CascadeNet1, dlProp);
-                obj.CascadeNet2 = initialize(obj.CascadeNet2, dlProp);
-                obj.CascadeNet3 = initialize(obj.CascadeNet3, dlProp);
             end
 
             [dlRPNScores, dlRPNReg] = predict(obj.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
@@ -334,31 +291,15 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             % Call region proposal
             dlProposals = regionProposal(obj, dlRPNReg, dlRPNScores);
             
-            dlPooled1 = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
-
-
-            [dlRPNScores2, dlRPNReg2] = predict(obj.CascadeNet1, dlPooled1, 'Outputs',{'RPNClassOut_1', 'RPNRegOut_1'});
-
-            refinedProposals2 = applyRegressionToProposals(obj, dlProposals, dlRPNReg2);
-
-            dlPooled2 = roiAlignPooling(obj, dlFeatures, refinedProposals2, obj.PoolSize);
-            
-            [dlRPNScores3, dlRPNReg3] = predict(obj.CascadeNet2, dlPooled2, 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
-            refinedProposals3 = applyRegressionToProposals(obj, refinedProposals2, dlRPNReg3);
-            dlPooled3 = roiAlignPooling(obj, dlFeatures, refinedProposals3, obj.PoolSize);
-
-            [dlRPNScores4, dlRPNReg4] = predict(obj.CascadeNet3, dlPooled3, 'Outputs',{'RPNClassOut_3', 'RPNRegOut_3'});
-            refinedProposals4 = applyRegressionToProposals(obj, refinedProposals3, dlRPNReg4);
-            dlPooled4 = roiAlignPooling(obj, dlFeatures, refinedProposals4, obj.PoolSize);
-
-            
+            dlPooled = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
+    
             if(~obj.PostPoolFeatureExtractionNet.Initialized)
                 obj.PostPoolFeatureExtractionNet = initialize(...
                                             obj.PostPoolFeatureExtractionNet,...
-                                            dlPooled4, dlPooled4);
+                                            dlPooled, dlPooled);
             end
-
-            dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled4, dlPooled4);
+            
+            dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled, dlPooled);
     
             % Box regression
             if(~obj.DetectionHeads.Initialized)
@@ -379,32 +320,66 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             dlFeatures = predict(obj.FeatureExtractionNet, dlX, 'Acceleration','auto');
     
             [dlRPNScores, dlRPNReg] = predict(obj.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
+            
+            % Call region proposal
             dlProposals = regionProposal(obj, dlRPNReg, dlRPNScores);
-            dlPooled1 = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
-
-            [dlRPNScores2, dlRPNReg2] = predict(obj.CascadeNet1, dlPooled1,'Acceleration','auto', 'Outputs',{'RPNClassOut_1', 'RPNRegOut_1'});
-            refinedProposals2 = applyRegressionToProposals(obj, dlProposals, dlRPNReg2);
-            dlPooled2 = roiAlignPooling(obj, dlFeatures, refinedProposals2, obj.PoolSize);
-
-            [dlRPNScores3, dlRPNReg3] = predict(obj.CascadeNet2, dlPooled2,'Acceleration','auto', 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
-            refinedProposals3 = applyRegressionToProposals(obj, refinedProposals2, dlRPNReg3);
-            dlPooled3 = roiAlignPooling(obj, dlFeatures, refinedProposals3, obj.PoolSize);
             
+            dlPooled = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
             
-            [dlRPNScores4, dlRPNReg4] = predict(obj.CascadeNet3, dlPooled3, 'Acceleration','auto', 'Outputs',{'RPNClassOut_3', 'RPNRegOut_3'});
-            refinedProposals4 = applyRegressionToProposals(obj, refinedProposals3, dlRPNReg4);
-            dlPooled4 = roiAlignPooling(obj, dlFeatures, refinedProposals4, obj.PoolSize);
-
-
-            dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled4, dlPooled4, 'Acceleration','auto');
+            dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled, dlPooled, 'Acceleration','auto');
             
             [dlBoxReg, dlBoxScores] = predict(obj.DetectionHeads, dlFinalFeatures, 'Acceleration','auto', 'Outputs',{'detectorRegOut', 'detectorClassOut'});
             
-            outputFeatures{1} = refinedProposals4;
+            outputFeatures{1} = dlProposals;
             outputFeatures{2}= dlBoxReg;
             outputFeatures{3}= dlBoxScores;
             outputFeatures{4}= dlFeatures;
 
+        end
+        function outputFeatures = reusePredict(obj, dlX, knownBBoxes, numAdditionalProposals)
+        
+            dlFeatures = predict(obj.FeatureExtractionNet, dlX, 'Acceleration','auto');
+            
+            [dlRPNScores, dlRPNReg] = predict(obj.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
+            
+            dlProposals = sequentialRegionProposal(obj, dlRPNReg, dlRPNScores, knownBBoxes, numAdditionalProposals); 
+            
+            dlPooled = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
+            
+            dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled, dlPooled, 'Acceleration','auto');
+            
+            [dlBoxReg, dlBoxScores] = predict(obj.DetectionHeads, dlFinalFeatures, 'Acceleration','auto', 'Outputs',{'detectorRegOut', 'detectorClassOut'});
+            
+            outputFeatures{1} = dlProposals;
+            outputFeatures{2}= dlBoxReg;
+            outputFeatures{3}= dlBoxScores;
+            outputFeatures{4}= dlFeatures;
+
+        end
+
+            function outputFeatures = sequentialPredict(obj, dlX, RPNScores, Alpha, numAdditionalProposals)
+        
+            dlFeatures = predict(obj.FeatureExtractionNet, dlX, 'Acceleration','auto');
+            
+            [dlRPNScores, dlRPNReg] = predict(obj.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
+            
+            if ~isempty(RPNScores)
+            dlRPNScores = ( (RPNScores.*dlRPNScores)*Alpha +dlRPNScores)./(1+Alpha);
+            end
+            
+            dlProposals = regionProposal(obj, dlRPNReg, dlRPNScores); 
+            
+            dlPooled = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
+            
+            dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled, dlPooled, 'Acceleration','auto');
+            
+            [dlBoxReg, dlBoxScores] = predict(obj.DetectionHeads, dlFinalFeatures, 'Acceleration','auto', 'Outputs',{'detectorRegOut', 'detectorClassOut'});
+            
+            outputFeatures{1} = dlProposals;
+            outputFeatures{2}= dlBoxReg;
+            outputFeatures{3}= dlBoxScores;
+            outputFeatures{4}= dlFeatures;
+            outputFeatures{5} = dlRPNScores;
 
         end
 
@@ -414,7 +389,7 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
 
     methods(Access=public)
 
-        function [dlRPNScores,dlCCScores1,dlCCScores2,dlCCScores3,dlRPNReg, dlCCReg1, dlCCReg2,dlCCReg3,dlProposals1,dlProposals2,dlProposals3,dlProposals4,dlBoxScores,dlBoxReg,dlMasks,state] = forward(obj, dlX ,varargin)
+        function [dlRPNScores,dlRPNReg,dlProposals,dlBoxScores,dlBoxReg,dlMasks,state] = forward(obj, dlX ,varargin)
         
             [dlX, localState] = forward(obj.FeatureExtractionNet, dlX, 'Acceleration','none');
             state = localState;
@@ -422,24 +397,15 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             % forward on RPN
             [dlRPNScores, dlRPNReg, localState] = forward(obj.RegionProposalNet, dlX, 'Acceleration','none','Outputs',{'RPNClassOut', 'RPNRegOut'});
             state = vertcat(state, localState);
-            dlProposals1 = regionProposal(obj, dlRPNReg, dlRPNScores);
-            dlPooled1 = roiAlignPooling(obj, dlX, dlProposals1, obj.PoolSize);
             
-            [dlCCScores1, dlCCReg1, localState] = forward(obj.CascadeNet1, dlPooled1,'Acceleration','auto', 'Outputs',{'RPNClassOut_1', 'RPNRegOut_1'});
-            dlProposals2 = applyRegressionToProposals(obj, dlProposals1, dlCCReg1);
-            dlPooled2 = roiAlignPooling(obj, dlX, dlProposals2, obj.PoolSize);
-
-            [dlCCScores2, dlCCReg2] = forward(obj.CascadeNet2, dlPooled2,'Acceleration','auto', 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
-            dlProposals3 = applyRegressionToProposals(obj, dlProposals2, dlCCReg2);
-            dlPooled3 = roiAlignPooling(obj, dlX, dlProposals3, obj.PoolSize);
+            % Call region proposal
+            dlProposals = regionProposal(obj, dlRPNReg, dlRPNScores);
             
-            [dlCCScores3, dlCCReg3] = predict(obj.CascadeNet3, dlPooled3, 'Acceleration','auto', 'Outputs',{'RPNClassOut_3', 'RPNRegOut_3'});
-            dlProposals4 = applyRegressionToProposals(obj, dlProposals3, dlCCReg3);
-            dlPooled4 = roiAlignPooling(obj, dlX, dlProposals4, obj.PoolSize);
-
-
+            % Perform region pooling
+            dlPooled = roiAlignPooling(obj, dlX, dlProposals, obj.PoolSize);
+            
             % forward on post region pooling feature extractor
-            [dlFinalFeatures, localState] = forward(obj.PostPoolFeatureExtractionNet, dlPooled4, dlPooled4, 'Acceleration','none');
+            [dlFinalFeatures, localState] = forward(obj.PostPoolFeatureExtractionNet, dlPooled, dlPooled, 'Acceleration','none');
             state = vertcat(state, localState);
             
             % forward on detection and segmentation heads
@@ -649,9 +615,6 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             s.ModelName                    = this.ModelName;
             s.FeatureExtractionNet         = this.FeatureExtractionNet;
             s.RegionProposalNet            = this.RegionProposalNet;
-            s.CascadeNet1            = this.CascadeNet1;
-            s.CascadeNet2            = this.CascadeNet2;
-            s.CascadeNet3            = this.CascadeNet3;
             s.PostPoolFeatureExtractionNet = this.PostPoolFeatureExtractionNet;
             s.DetectionHeads               = this.DetectionHeads;
             s.MaskSegmentationHead         = this.MaskSegmentationHead;
@@ -694,13 +657,10 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             try
                 vision.internal.requiresNeuralToolbox(mfilename);
 
-                this = CascadeRCNN("none");
+                this = MRCNN("none");
                    
                 this.FeatureExtractionNet         = s.FeatureExtractionNet;
-                this.RegionProposalNet           = s.RegionProposalNet;
-                this.CascadeNet1           = s.CascadeNet1;
-                this.CascadeNet2           = s.CascadeNet2;
-                this.CascadeNet3           = s.CascadeNet3;
+                this.RegionProposalNet            = s.RegionProposalNet;
                 this.PostPoolFeatureExtractionNet = s.PostPoolFeatureExtractionNet;
                 this.DetectionHeads               = s.DetectionHeads;
                 this.MaskSegmentationHead         = s.MaskSegmentationHead;
@@ -1123,6 +1083,98 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
 
 
 
+        function [masks, boxLabel, boxScore, boxes, RPNScoreOut] = segmentObjectsinVideo(obj, im, RPNScores, Alpha, executionEnvironment, Options)
+
+
+            orgSize = size(im);
+    
+            % Resize and normalize image
+            [im, scaleRatio] = preprocessImage(obj, single(im), obj.InputSize);
+
+            if(isequal(executionEnvironment, 'gpu'))
+                %GPU
+                im = gpuArray(im);
+            else
+                %Host
+                if(isgpuarray(im))
+                    im = extractData(im);
+                end
+            end
+            
+            dlX = dlarray(im, 'SSCB');
+
+            
+            netOut = sequentialPredict(obj, dlX, RPNScores, Alpha);
+            imageSize = size(im);
+            [boxes, boxLabel, boxScore] = postProcessOutputs(obj,...
+                                          extractdata(netOut{2}),...
+                                          extractdata(netOut{3}),...
+                                          extractdata(netOut{1}), imageSize, 1);
+
+            RPNScoreOut = extractdata(netOut{5});
+            
+            boxes = boxes{1};
+            boxLabel = boxLabel{1};
+            boxScore = boxScore{1};
+
+            % If predicted boxes are empty, return empty mask & empty cat for
+            % labels
+            if(isempty(boxes))
+                boxLabel = categorical(boxLabel, 1:numel(obj.ClassNames), obj.ClassNames);
+                masks = zeros(0,0,0, 'like', boxes);
+                return;
+            end
+            
+            maskBranchBoxes = [boxes  ones(size(boxes,1), 1)];
+            
+            maskBranchBoxes = vision.internal.cnn.boxUtils.xywhToX1Y1X2Y2(...
+                                                                         maskBranchBoxes);
+    
+            dlBoxes = dlarray(maskBranchBoxes', 'SSCB');
+            
+            % Feature pooling for mask branch
+            dlMaskPooled = roiAlignPooling(obj, netOut{4}, dlBoxes, obj.MaskPoolSize);
+            
+            dlPostFeatureMask = predict(obj.PostPoolFeatureExtractionNet, dlMaskPooled, dlMaskPooled, 'Acceleration','auto');
+            
+            % Predict on mask branch to get h x w x numClasses x numProposals
+            % cropped masks.
+            dlMasks = predict(obj.MaskSegmentationHead, dlPostFeatureMask);
+            dlMasks = extractdata(dlMasks);
+    
+            % Extract the cropped mask corresponding to the boxLabel for
+            % each proposal.
+            finalCroppedMasks = zeros(size(dlMasks,1), size(dlMasks, 2),...
+                                      size(boxes,1));
+            
+            for i = 1:size(boxes,1)
+                finalCroppedMasks(:,:,i) = dlMasks(:,:, boxLabel(i), i);
+            end
+            
+            % Final box detections in original image coordinates
+            if(isgpuarray(boxes))
+                boxes = gather(boxes);
+            end
+            boxes = bboxResizePixel(obj, floor(boxes), 1/scaleRatio);
+
+            boxes = clipBoxes(obj, boxes, orgSize);
+            
+            % Filter out zero width height predictions
+            invalidBoxes = (boxes(:,3)==0 | boxes(:,4)==0);
+            boxes(invalidBoxes,:)=[];
+            boxLabel(invalidBoxes) = [];
+            boxScore(invalidBoxes) = [];
+
+            % Generate full sized masks from cropped masks
+            masks = generateFullSizedMasks(obj, finalCroppedMasks, boxes, orgSize);
+            
+            % Convert boxLabels to categorical
+            boxLabel = categorical(boxLabel, 1:numel(obj.ClassNames), obj.ClassNames);
+        end
+
+
+
+
 
         
         function [finalBoxes, finalLabels, finalScores] = postProcessOutputs(obj, deltas, scores, proposals, imageSize, batchSize)
@@ -1184,7 +1236,6 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             % Step 7: Clip the boxes to image bounds
             % the boxes here get flipped from 4xnumPropoals to numProposalsx4
             boxes = clipBoxes(obj, boxes', imageSize);
-            boxes = max(boxes, 1);
 
             % Step 8: Group predictions by image and apply NMS
 
@@ -1357,10 +1408,6 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
 
             if(~obj.FreezeRPN)
                 s.RegionProposalNet = obj.RegionProposalNet.Learnables;
-                s.CascadeNet1 = obj.CascadeNet1.Learnables;
-                s.CascadeNet2 = obj.CascadeNet2.Learnables;
-                s.CascadeNet3 = obj.CascadeNet3.Learnables;
-
             end
             
             s.DetectionHeads = obj.DetectionHeads.Learnables;
@@ -1375,10 +1422,6 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
 
             if(isfield(in, 'RegionProposalNet'))
                 obj.RegionProposalNet.Learnables = in.RegionProposalNet;
-                obj.CascadeNet1.Learnables = in.CascadeNet1;
-                obj.CascadeNet2.Learnables = in.CascadeNet2;
-                obj.CascadeNet3.Learnables = in.CascadeNet3;
-
             end
             
             if(isfield(in, 'PostPoolFeatureExtractionNet'))
@@ -1413,9 +1456,6 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
 
             layers = vertcat(obj.FeatureExtractionNet.Layers,...
                              obj.RegionProposalNet.Layers,...
-                             obj.CascadeNet1.Layers,...
-                             obj.CascadeNet2.Layers,...
-                             obj.CascadeNet3.Layers,...
                              obj.PostPoolFeatureExtractionNet.Layers,...
                              obj.DetectionHeads.Layers,...
                              obj.MaskSegmentationHead.Layers);
@@ -1428,9 +1468,6 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
         function state = get.State(obj)
             state = vertcat(obj.FeatureExtractionNet.State,...
                              obj.RegionProposalNet.State,...
-                             obj.CascadeNet1.State,...
-                             obj.CascadeNet2.State,...
-                             obj.CascadeNet3.State,...
                              obj.PostPoolFeatureExtractionNet.State,...
                              obj.DetectionHeads.State,...
                              obj.MaskSegmentationHead.State);
@@ -1447,10 +1484,7 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
         function outnames = get.OutputNames(obj)
             outnames = horzcat(...
                              obj.RegionProposalNet.OutputNames,...
-                             obj.CascadeNet1.OutputNames,...
-                             obj.CascadeNet2.OutputNames,...
-                             obj.CascadeNet3.OutputNames,...
-                             {'proposal1'}, {'proposal2'}, {'proposal3'}, {'proposal4'}, ...
+                             {'proposals'},...
                              obj.DetectionHeads.OutputNames,...
                              obj.MaskSegmentationHead.OutputNames);
         end
