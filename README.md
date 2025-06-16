@@ -13,7 +13,7 @@ If you use Multires-ML-Microscopy in your work, please cite it as follows:
 
 **APA**
 ```
-N Dhulashia1, Y Doğan1, D Rajpara1, X Shi1, L Casamitjana Ortega1, R Haqshenas (2025), Multires-ML-Microscopy: Multiresolution Machine Learning based Segmentation and Characterisation of Microscopy Images, https://github.com/USonixGroup/Multires-ML-Microscopy
+N Dhulashia1, Y Doğan, D Rajpara1, X Shi1, L Casamitjana Ortega1, R Haqshenas (2025), Multires-ML-Microscopy: Multiresolution Machine Learning based Segmentation and Characterisation of Microscopy Images, https://github.com/USonixGroup/Multires-ML-Microscopy
 ```
 
 **BibTeX**
