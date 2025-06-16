@@ -19,12 +19,12 @@ N Dhulashia, Y Doğan, D Rajpara1, X Shi, L Casamitjana Ortega, R Haqshenas (202
 **BibTeX**
 ```
 @software{optimuslib,
-author = {N Dhulashia1, Y Doğan1, D Rajpara1, X Shi1, L Casamitjana Ortega1, R Haqshenas },
+author = {N Dhulashia, Y Doğan, D Rajpara, X Shi1, L Casamitjana Ortega, R Haqshenas },
 title = {Multires-ML-Microscopy: Multiresolution Machine Learning based Segmentation and Characterisation of Microscopy Images},
 url = {https://github.com/TechAvi-eng/Multires-ML-Microscopy},
 version = {0.1}
 }
 ```
 ## License
-Multires-ML-Microscopy s licensed under an MIT licence.
+Multires-ML-Microscopy is licensed under an MIT licence.
 Copyright (c) 2025.
