@@ -14,7 +14,7 @@ ABs = [21 21; 21 32; 32 21;...
     107 107; 160 107; 107 160; ...
     160 160];
 
-net = CascadeRCNN(trainClassNames,ABs,InputSize=imageSizeTrain, ScaleFactor=[1 1]/16,ModelName='CEfficientNet')
+net = CascadeRCNN(trainClassNames,ABs,InputSize=imageSizeTrain, ScaleFactor=[1 1]/16,ModelName='EfficientNet')
 
 
 %%
