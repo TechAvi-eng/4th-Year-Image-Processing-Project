@@ -238,10 +238,10 @@ function [network, info] = trainCascadeRCNN(trainingData, network, options, para
     % Define metric names. These are same as the lossObj field names as
     % returned by the lossfunction below. This avoids recompute oof the metrics.
 
-    if strcmp(version('-release'),'2024b')
-            metrics = {images.dltrain.internal.LossMetricAdapter(lossFcn)};
-    elseif strcmp(version('-release'),'2023a')
-            metrics = struct('Loss',lossFcn, 'RPNClass', [], 'RPNReg', [], 'Class1', [],'Class2', [],'Class3', [],'Class4', [], "Reg1", [],"Reg2", [],"Reg3", [],"Reg4", [], "MaskLoss", []);
+    if strcmp(version('-release'),'2023a')
+       metrics = struct('Loss',lossFcn, 'RPNClass', [], 'RPNReg', [], 'Class1', [],'Class2', [],'Class3', [],'Class4', [], "Reg1", [],"Reg2", [],"Reg3", [],"Reg4", [], "MaskLoss", []);
+    else
+       metrics = {images.dltrain.internal.LossMetricAdapter(lossFcn)};
     end
 
     [network,info] = images.dltrain.internal.dltrain(mbqTrain,network,options,lossFcn,metrics,'Loss', 'ExperimentMonitor',params.ExperimentMonitor);
@@ -286,14 +286,13 @@ function data = preprocessData(data,targetSize)
        
     end
     
-    % Normalize image using COCO imageset means
 
     
     im = data{1};
     
     % Step 3: Normalize
     for i = size(im,3)
-        im(:,:,i) = im(:,:,i) - mean(im(:,:,i));
+        im(:,:,i) = rescale(im(:,:,i));
     end
     
     

@@ -1,4 +1,4 @@
-classdef MRCNNLoss < images.dltrain.internal.Loss
+classdef CascadeRCNNLoss < images.dltrain.internal.Loss
 % This class defines the loss for maskrcnn object training
 
 % Copyright 2021-2023 The MathWorks, Inc.
@@ -15,7 +15,7 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
 
     methods
 
-        function obj = MRCNNLoss(params)
+        function obj = CascadeRCNNLoss(params)
             obj.params = params;
         end
 
@@ -31,6 +31,8 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         RPNClassificationTargets = onehotencode(assignedLabelsRPN, 3);
         % detetron2 uses ony foreground class for classification.
         RPNClassificationTargets(:,:,2,:) = [];
+        
+        numImagesInBatch = size(gTruthBoxes,1);
         RPNClassificationTargets  = reshape(RPNClassificationTargets, featureSize(1), featureSize(2), [], numImagesInBatch );
         RPNClassificationTargets(isnan(RPNClassificationTargets)) = 0;
         
@@ -48,10 +50,10 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         % Generate RCNN response targets
         %--------------------------------
         % Step 1: Match ground truth boxes to proposals 
-        proposals1 = convertProposals(proposal1);
-        proposals2 = convertProposals(proposal2);
-        proposals3 = convertProposals(proposal3);
-        proposals4 = convertProposals(proposal4);
+        proposals1 = convertProposals(proposal1, numImagesInBatch);
+        proposals2 = convertProposals(proposal2, numImagesInBatch);
+        proposals3 = convertProposals(proposal3, numImagesInBatch);
+        proposals4 = convertProposals(proposal4, numImagesInBatch);
 
         [assignment1, positiveIndex1, negativeIndex1] = vision.internal.cnn.maskrcnn.bboxMatchAndAssign(...
                                                                 proposals1, gTruthBoxes,...
@@ -70,7 +72,7 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         
         [assignment4, positiveIndex4, negativeIndex4] = vision.internal.cnn.maskrcnn.bboxMatchAndAssign(...
                                                                 proposals4, gTruthBoxes,...
-                                                                [0.7 1], [0 0.7],...
+                                                                [0.725 1], [0 0.725],...
                                                                 0);            
 
                                                                     
@@ -110,6 +112,24 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         instanceWeightsReg3 = vision.internal.cnn.maskrcnn.regressionResponseInstanceWeights (classificationTargets3, obj.params.BackgroundClass);
         instanceWeightsReg4 = vision.internal.cnn.maskrcnn.regressionResponseInstanceWeights (classificationTargets4, obj.params.BackgroundClass);
          
+
+        % Step 5: Generate mask targets
+         
+        % Crop and resize the instances based on proposal bboxes and network output size
+        maskOutputSize = obj.params.MaskOutputSize;
+        croppedMasks = vision.internal.cnn.maskrcnn.cropandResizeMasks (gTruthMasks, gTruthBoxes, maskOutputSize);
+         
+        % Generate mask targets
+        maskTargets = vision.internal.cnn.maskrcnn.generateMaskTargets(croppedMasks, assignment4, classificationTargets4, obj.params);
+        
+
+        % Mask Loss (Weighted cross entropy)
+        maskTargets= cat(4,maskTargets{:});
+        positiveIndex1 = cat(1,positiveIndex1{:});
+        LossRCNNMask = vision.internal.cnn.maskrcnn.SpatialCrossEntropy(YMask, single(maskTargets), positiveIndex1);
+
+
+
         % Stage 2 (RCNN) Loss
         % --------------------       
 
@@ -129,6 +149,12 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         classificationTargets2(isnan(classificationTargets2)) = 0;
         classificationTargets3(isnan(classificationTargets3)) = 0;
         classificationTargets4(isnan(classificationTargets4)) = 0;
+
+        %turn sigmoid into pseudo-softmax format
+        CCScore1 = cat(3, CCScore1, 1-CCScore1);
+        CCScore2 = cat(3, CCScore2, 1-CCScore2);
+        CCScore3 = cat(3, CCScore3, 1-CCScore3);
+
 
         classificationTargets1 = reshape(classificationTargets1 ,1, 1, size(CCScore1,3),[]);
         classificationTargets2 = reshape(classificationTargets2 ,1, 1, size(CCScore2,3),[]);
@@ -171,29 +197,10 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
         LossRCNNReg4 = vision.internal.cnn.maskrcnn.smoothL1(YRCNNReg, single(regressionTargets4), single(instanceWeightsReg4));
 
         %adjust weights for repeated iteration
-        LossRCNNReg3 = LossRCNNReg3/2;
-        LossRCNNReg4 = LossRCNNReg4/2;
-        LossRCNNClass3 = LossRCNNClass3/2;
-        LossRCNNClass4 = LossRCNNClass4/2;
-
-
-        % Step 5: Generate mask targets
-         
-        % Crop and resize the instances based on proposal bboxes and network output size
-        maskOutputSize = obj.params.MaskOutputSize;
-        croppedMasks = vision.internal.cnn.maskrcnn.cropandResizeMasks (gTruthMasks, gTruthBoxes, maskOutputSize);
-         
-        % Generate mask targets
-        maskTargets = vision.internal.cnn.maskrcnn.generateMaskTargets(croppedMasks, assignment1, classificationTargets1, obj.params);
-        
-
-        % Mask Loss (Weighted cross entropy)
-        maskTargets= cat(4,maskTargets{:});
-        positiveIndex1 = cat(1,positiveIndex1{:});
-        LossRCNNMask = vision.internal.cnn.maskrcnn.SpatialCrossEntropy(YMask, single(maskTargets), positiveIndex1);
-         
-        
-
+        % LossRCNNReg3 = LossRCNNReg3/2;
+        % LossRCNNReg4 = LossRCNNReg4/2;
+        % LossRCNNClass3 = LossRCNNClass3/2;
+        % LossRCNNClass4 = LossRCNNClass4/2;
 
 
 
@@ -228,16 +235,15 @@ classdef MRCNNLoss < images.dltrain.internal.Loss
 
 end
 
-function proposals = convertProposals(proposal)
+function proposals = convertProposals(proposal, numImagesInBatch);
+
         % Proposals are 5XNumProposals (Due to batch restrictions from custom RPL layer)
         proposals = gather(extractdata(proposal));
         
         % Convert proposals to numProposals x 5 (as expected by the rest of post processing code)
-        proposals =proposals';
+        proposals = proposals';
         
         proposals(:,1:4) = vision.internal.cnn.maskrcnn.boxUtils.x1y1x2y2ToXYWH(proposals(:,1:4));
-        
-        numImagesInBatch = size(gTruthBoxes,1);
         %Convert numProposalsx5 Proposals to numImagesInBatchx1 (Group by image index)
         proposals = vision.internal.cnn.maskrcnn.groupProposalsByImageIndex(proposals, numImagesInBatch);
 end

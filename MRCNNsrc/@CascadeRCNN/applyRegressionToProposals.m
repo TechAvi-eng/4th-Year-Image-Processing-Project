@@ -38,11 +38,11 @@ function refinedProposals = applyRegressionToProposals(obj, proposals, regressio
     y2 = proposals(4, :, :, :);
     scores = proposals(5, :, :, :);
     
-    % Calculate current box properties
-    widths = x2 - x1 + 1;
-    heights = y2 - y1 + 1;
-    centerX = x1 + 0.5 * (widths - 1);
-    centerY = y1 + 0.5 * (heights - 1);
+    % Calculate current box properties (exclusive coordinates)
+    widths = x2 - x1;
+    heights = y2 - y1;
+    centerX = x1 + 0.5 * widths;
+    centerY = y1 + 0.5 * heights;
     
     % Handle different regression shapes and batch dimensions
     regSize = size(regressions);
@@ -88,7 +88,7 @@ function refinedProposals = applyRegressionToProposals(obj, proposals, regressio
         dh = regressions(4, :, :, :);
     else
         % Multi-class regression - extract specific class
-        numClasses = size(regressions, 1) / 4;
+        %numClasses = size(regressions, 1) / 4;
         startIdx = (classIdx - 1) * 4 + 1;
         dx = regressions(startIdx, :, :, :);
         dy = regressions(startIdx + 1, :, :, :);
@@ -110,15 +110,21 @@ function refinedProposals = applyRegressionToProposals(obj, proposals, regressio
     predHeight = exp(dh) .* heights;
     
     % Convert back to corner coordinates
-    newX1 = predCenterX - 0.5 * (predWidth - 1);
-    newY1 = predCenterY - 0.5 * (predHeight - 1);
-    newX2 = predCenterX + 0.5 * (predWidth - 1);
-    newY2 = predCenterY + 0.5 * (predHeight - 1);
+    newX1 = predCenterX - 0.5 * predWidth;
+    newY1 = predCenterY - 0.5 * predHeight;
+    newX2 = predCenterX + 0.5 * predWidth;
+    newY2 = predCenterY + 0.5 * predHeight;
     
+    % Clip to image boundaries
+    newX1 = min(max(newX1, 1), imgWidth);
+    newY1 = max(min(newY1, imgHeight), 1);
+    newX2 = min(max(newX2, 1), imgWidth);
+    newY2 = max(min(newY2, imgHeight), 1);
+
     % Apply minimum size constraint and clipping
     % Ensure minimum width and height
-    currentWidth = newX2 - newX1 + 1;
-    currentHeight = newY2 - newY1 + 1;
+    currentWidth = newX2 - newX1;
+    currentHeight = newY2 - newY1;
     
     % Expand boxes that are too small
     tooSmallW = currentWidth < minSize;
@@ -136,11 +142,7 @@ function refinedProposals = applyRegressionToProposals(obj, proposals, regressio
         newY2(tooSmallH) = newY2(tooSmallH) + expand(tooSmallH);
     end
     
-    % Clip to image boundaries using obj.InputSize
-    newX1 = max(newX1, 0);
-    newY1 = max(newY1, 0);
-    newX2 = min(newX2, imgWidth - 1);
-    newY2 = min(newY2, imgHeight - 1);
+
     
     % Round to whole numbers while preserving dlarray properties
     newX1 = round(newX1);

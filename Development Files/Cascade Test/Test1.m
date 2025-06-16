@@ -1,12 +1,6 @@
 clear
 clc
 close all
-
-%%
-ds = fileDatastore("./SingleDS/", ReadFcn=@(x)MATReader1C(x, 0)); %training data
-data = preview(ds)
-
-
 %%
 clc
 
@@ -24,6 +18,9 @@ net = CascadeRCNN(trainClassNames,ABs,InputSize=imageSizeTrain, ScaleFactor=[1 1
 
 
 %%
+ds = fileDatastore("./SingleDS/", ReadFcn=@(x)MATReader1C(x, 0)); %training data
+data = preview(ds)
+
 options = trainingOptions("adam", ... 
     InitialLearnRate=0.00001, ...
     LearnRateSchedule="piecewise", ...
@@ -33,16 +30,15 @@ options = trainingOptions("adam", ...
     MaxEpochs=320, ...
     MiniBatchSize=1, ...
     ResetInputNormalization=false, ...
-    ExecutionEnvironment="gpu", ...
+    ExecutionEnvironment="cpu", ...
     VerboseFrequency=1, ...
     L2Regularization=1e-4, ...
     GradientThreshold=1, ...
     BatchNormalizationStatistics="moving")
 
 %%
- 
 
-[net,info] = trainMRCNN(ds,net,options, NumStrongestRegions=150, NumRegionsToSample=150, PositiveOverlapRange=[0.5 1], NegativeOverlapRange=[0 0.5], ForcedPositiveProposals=false)
+[net,info] = trainCascadeRCNN(ds,net,options, NumStrongestRegions=150, NumRegionsToSample=150, PositiveOverlapRange=[0.5 1], NegativeOverlapRange=[0 0.5], ForcedPositiveProposals=false)
 
 
 %%
@@ -58,8 +54,6 @@ im = smartResize(im, [528, 704]);
 clc
 tic
 % %% utility to use model to test certain images 
-% im1=imread("../JSON_FORMATTING,/LiveCellsIms1/livecell_test_images/A172_Phase_C7_1_00d00h00m_3.tif");
-% 
 %net.ProposalsOutsideImage='clip';
 %net.MinScore = 0.001;
      [masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.005,NumStrongestRegions=1000, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );

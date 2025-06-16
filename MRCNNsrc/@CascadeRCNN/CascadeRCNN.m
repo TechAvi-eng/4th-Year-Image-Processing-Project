@@ -379,19 +379,13 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             dlFeatures = predict(obj.FeatureExtractionNet, dlX, 'Acceleration','auto');
     
             [dlRPNScores, dlRPNReg] = predict(obj.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
-            
-            % Call region proposal
             dlProposals = regionProposal(obj, dlRPNReg, dlRPNScores);
-            
             dlPooled1 = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
-                        dlPooled1 = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
-
 
             [dlRPNScores2, dlRPNReg2] = predict(obj.CascadeNet1, dlPooled1,'Acceleration','auto', 'Outputs',{'RPNClassOut_1', 'RPNRegOut_1'});
-
             refinedProposals2 = applyRegressionToProposals(obj, dlProposals, dlRPNReg2);
-
             dlPooled2 = roiAlignPooling(obj, dlFeatures, refinedProposals2, obj.PoolSize);
+
             [dlRPNScores3, dlRPNReg3] = predict(obj.CascadeNet2, dlPooled2,'Acceleration','auto', 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
             refinedProposals3 = applyRegressionToProposals(obj, refinedProposals2, dlRPNReg3);
             dlPooled3 = roiAlignPooling(obj, dlFeatures, refinedProposals3, obj.PoolSize);
@@ -429,19 +423,19 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             [dlRPNScores, dlRPNReg, localState] = forward(obj.RegionProposalNet, dlX, 'Acceleration','none','Outputs',{'RPNClassOut', 'RPNRegOut'});
             state = vertcat(state, localState);
             dlProposals1 = regionProposal(obj, dlRPNReg, dlRPNScores);
-            dlPooled1 = roiAlignPooling(obj, dlFeatures, dlProposals1, obj.PoolSize);
+            dlPooled1 = roiAlignPooling(obj, dlX, dlProposals1, obj.PoolSize);
             
             [dlCCScores1, dlCCReg1, localState] = forward(obj.CascadeNet1, dlPooled1,'Acceleration','auto', 'Outputs',{'RPNClassOut_1', 'RPNRegOut_1'});
             dlProposals2 = applyRegressionToProposals(obj, dlProposals1, dlCCReg1);
-            dlPooled2 = roiAlignPooling(obj, dlFeatures, dlProposals2, obj.PoolSize);
+            dlPooled2 = roiAlignPooling(obj, dlX, dlProposals2, obj.PoolSize);
 
             [dlCCScores2, dlCCReg2] = forward(obj.CascadeNet2, dlPooled2,'Acceleration','auto', 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
-            dlProposals3 = applyRegressionToProposals(obj, dlProposals2, dlCCReg2s);
+            dlProposals3 = applyRegressionToProposals(obj, dlProposals2, dlCCReg2);
             dlPooled3 = roiAlignPooling(obj, dlX, dlProposals3, obj.PoolSize);
             
             [dlCCScores3, dlCCReg3] = predict(obj.CascadeNet3, dlPooled3, 'Acceleration','auto', 'Outputs',{'RPNClassOut_3', 'RPNRegOut_3'});
-            dlProposals4 = applyRegressionToProposals(obj, refinedProposals3, dlCCReg3);
-            dlPooled4 = roiAlignPooling(obj, dlFeatures, dlProposals4, obj.PoolSize);
+            dlProposals4 = applyRegressionToProposals(obj, dlProposals3, dlCCReg3);
+            dlPooled4 = roiAlignPooling(obj, dlX, dlProposals4, obj.PoolSize);
 
 
             % forward on post region pooling feature extractor
@@ -1383,7 +1377,7 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
                 obj.RegionProposalNet.Learnables = in.RegionProposalNet;
                 obj.CascadeNet1.Learnables = in.CascadeNet1;
                 obj.CascadeNet2.Learnables = in.CascadeNet2;
-                obj.CascadeNet3.Learnables = in.CascadeNet2;
+                obj.CascadeNet3.Learnables = in.CascadeNet3;
 
             end
             
@@ -1456,7 +1450,7 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
                              obj.CascadeNet1.OutputNames,...
                              obj.CascadeNet2.OutputNames,...
                              obj.CascadeNet3.OutputNames,...
-                             {'proposals'},...
+                             {'proposal1'}, {'proposal2'}, {'proposal3'}, {'proposal4'}, ...
                              obj.DetectionHeads.OutputNames,...
                              obj.MaskSegmentationHead.OutputNames);
         end

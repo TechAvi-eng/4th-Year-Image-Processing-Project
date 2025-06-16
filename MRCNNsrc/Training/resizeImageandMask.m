@@ -41,7 +41,7 @@ c2 = ceil((paddedW - sz(2))/2)+1:ceil((paddedW + sz(2))/2);
 % Adjust bounding box positions to account for padding offset
 if ~isempty(BBoxIn)
     BBoxOut = BBoxIn;
-    BBoxOut(:,2) = min(BBoxIn(:,2)+(NewSize-sz(1))/2, NewSize(1));
+    BBoxOut(:,2) = min(BBoxIn(:,2)+(NewSize(1)-sz(1))/2, NewSize(1));
 else
     BBoxOut = [];
 end
