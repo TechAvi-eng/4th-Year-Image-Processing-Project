@@ -51,7 +51,7 @@ im = smartResize(im, [528, 704]);
 
 
 %%
-clc
+
 tic
 % %% utility to use model to test certain images 
 %net.ProposalsOutsideImage='clip';
@@ -65,7 +65,7 @@ toc
 % imshow(insertObjectMask(im1,masks, Color=lines(size(masks, 3))))
 
 if(isempty(masks))
-    overlayedImage = im(:,:,1);
+    overlayedImage = im(:,:,1) ;
 else
     overlayedImage = insertObjectMask(im(:,:,1), masks,Color=lines(size(masks, 3)) );
 end
@@ -73,7 +73,7 @@ end
 figure, imshow(overlayedImage)
 
 % Show the bounding boxes and labels on the objects
-%showShape("rectangle", gather(boxes), "Label", scores, "LineColor",'r')
+showShape("rectangle", gather(boxes), "Label", scores, "LineColor",'r')
 
 
 %%

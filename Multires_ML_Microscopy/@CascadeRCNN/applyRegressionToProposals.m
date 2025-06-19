@@ -142,7 +142,11 @@ function refinedProposals = applyRegressionToProposals(obj, proposals, regressio
         newY2(tooSmallH) = newY2(tooSmallH) + expand(tooSmallH);
     end
     
-
+    % Clip to image boundaries
+    newX1 = min(max(newX1, 1), imgWidth);
+    newY1 = max(min(newY1, imgHeight), 1);
+    newX2 = min(max(newX2, 1), imgWidth);
+    newY2 = max(min(newY2, imgHeight), 1);
     
     % Round to whole numbers while preserving dlarray properties
     newX1 = round(newX1);

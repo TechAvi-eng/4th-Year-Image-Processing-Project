@@ -329,11 +329,11 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             end
 
             [dlRPNScores, dlRPNReg] = predict(obj.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
-            
+
 
             % Call region proposal
             dlProposals = regionProposal(obj, dlRPNReg, dlRPNScores);
-            
+
             dlPooled1 = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
 
 
@@ -342,7 +342,7 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             refinedProposals2 = applyRegressionToProposals(obj, dlProposals, dlRPNReg2);
 
             dlPooled2 = roiAlignPooling(obj, dlFeatures, refinedProposals2, obj.PoolSize);
-            
+
             [dlRPNScores3, dlRPNReg3] = predict(obj.CascadeNet2, dlPooled2, 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
             refinedProposals3 = applyRegressionToProposals(obj, refinedProposals2, dlRPNReg3);
             dlPooled3 = roiAlignPooling(obj, dlFeatures, refinedProposals3, obj.PoolSize);
@@ -351,7 +351,7 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             refinedProposals4 = applyRegressionToProposals(obj, refinedProposals3, dlRPNReg4);
             dlPooled4 = roiAlignPooling(obj, dlFeatures, refinedProposals4, obj.PoolSize);
 
-            
+
             if(~obj.PostPoolFeatureExtractionNet.Initialized)
                 obj.PostPoolFeatureExtractionNet = initialize(...
                                             obj.PostPoolFeatureExtractionNet,...
@@ -359,12 +359,12 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             end
 
             dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled4, dlPooled4);
-    
+
             % Box regression
             if(~obj.DetectionHeads.Initialized)
                 obj.DetectionHeads = initialize(obj.DetectionHeads, dlFinalFeatures);
             end
-    
+
             % Predict on mask branch to get h x w x numClasses x numProposals
             % cropped masks.
             if(~obj.MaskSegmentationHead.Initialized)
