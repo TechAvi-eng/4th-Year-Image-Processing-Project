@@ -313,6 +313,8 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
     methods(Access=public)
         % initialize all sub - dlnetworks
         function obj = initialize(obj)
+
+            if ~obj.RegionProposalNet.Initialized
             
             dlX = dlarray(rand(obj.InputSize, 'single')*1, 'SSCB');
 
@@ -370,6 +372,7 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
             if(~obj.MaskSegmentationHead.Initialized)
                 obj.MaskSegmentationHead = initialize(obj.MaskSegmentationHead,...
                                                           dlFinalFeatures);
+            end
             end
             
         end
