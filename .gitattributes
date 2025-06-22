@@ -11,3 +11,4 @@ Multires_ML_Microscopy/@MRCNN/NetData/EfficientNet filter=lfs diff=lfs merge=lfs
 Multires_ML_Microscopy/@MRCNN/NetData/ResNet101 filter=lfs diff=lfs merge=lfs -text
 Multires_ML_Microscopy/@MRCNN/NetData/ResNet50 filter=lfs diff=lfs merge=lfs -text
 Multires_ML_Microscopy/@CascadeRCNN/NetData/EfficientNet filter=lfs diff=lfs merge=lfs -text
+Multires_ML_Microscopy filter=lfs diff=lfs merge=lfs -text
