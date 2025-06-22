@@ -314,66 +314,65 @@ classdef CascadeRCNN < deep.internal.sdk.LearnableParameterContainer
         % initialize all sub - dlnetworks
         function obj = initialize(obj)
 
-            if ~obj.RegionProposalNet.Initialized
             
-            dlX = dlarray(rand(obj.InputSize, 'single')*1, 'SSCB');
-
-            dlFeatures = predict(obj.FeatureExtractionNet, dlX);
+            % dlX = dlarray(rand(obj.InputSize, 'single')*1, 'SSCB');
+            % 
+            % dlFeatures = predict(obj.FeatureExtractionNet, dlX);
+            % 
+            % % predict on RPN
+            % if(~obj.RegionProposalNet.Initialized)
+            %     obj.RegionProposalNet = initialize(obj.RegionProposalNet, dlFeatures);
+            % 
+            %     dlProp = dlarray(rand([14 14 1024 1]), 'SSCB');
+            %     obj.CascadeNet1 = initialize(obj.CascadeNet1, dlProp);
+            %     obj.CascadeNet2 = initialize(obj.CascadeNet2, dlProp);
+            %     obj.CascadeNet3 = initialize(obj.CascadeNet3, dlProp);
+            % end
+            % 
+            % [dlRPNScores, dlRPNReg] = predict(obj.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
+            % 
+            % 
+            % % Call region proposal
+            % dlProposals = regionProposal(obj, dlRPNReg, dlRPNScores);
+            % 
+            % dlPooled1 = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
+            % 
+            % 
+            % [dlRPNScores2, dlRPNReg2] = predict(obj.CascadeNet1, dlPooled1, 'Outputs',{'RPNClassOut_1', 'RPNRegOut_1'});
+            % 
+            % refinedProposals2 = applyRegressionToProposals(obj, dlProposals, dlRPNReg2);
+            % 
+            % dlPooled2 = roiAlignPooling(obj, dlFeatures, refinedProposals2, obj.PoolSize);
+            % 
+            % [dlRPNScores3, dlRPNReg3] = predict(obj.CascadeNet2, dlPooled2, 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
+            % refinedProposals3 = applyRegressionToProposals(obj, refinedProposals2, dlRPNReg3);
+            % dlPooled3 = roiAlignPooling(obj, dlFeatures, refinedProposals3, obj.PoolSize);
+            % 
+            % [dlRPNScores4, dlRPNReg4] = predict(obj.CascadeNet3, dlPooled3, 'Outputs',{'RPNClassOut_3', 'RPNRegOut_3'});
+            % refinedProposals4 = applyRegressionToProposals(obj, refinedProposals3, dlRPNReg4);
+            % dlPooled4 = roiAlignPooling(obj, dlFeatures, refinedProposals4, obj.PoolSize);
+            % 
+            % 
+            % if(~obj.PostPoolFeatureExtractionNet.Initialized)
+            %     obj.PostPoolFeatureExtractionNet = initialize(...
+            %                                 obj.PostPoolFeatureExtractionNet,...
+            %                                 dlPooled4, dlPooled4);
+            % end
+            % 
+            % dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled4, dlPooled4);
+            % 
+            % % Box regression
+            % if(~obj.DetectionHeads.Initialized)
+            %     obj.DetectionHeads = initialize(obj.DetectionHeads, dlFinalFeatures);
+            % end
+            % 
+            % % Predict on mask branch to get h x w x numClasses x numProposals
+            % % cropped masks.
+            % if(~obj.MaskSegmentationHead.Initialized)
+            %     obj.MaskSegmentationHead = initialize(obj.MaskSegmentationHead,...
+            %                                               dlFinalFeatures);
+            % end
             
-            % predict on RPN
-            if(~obj.RegionProposalNet.Initialized)
-                obj.RegionProposalNet = initialize(obj.RegionProposalNet, dlFeatures);
-
-                dlProp = dlarray(rand([14 14 1024 1]), 'SSCB');
-                obj.CascadeNet1 = initialize(obj.CascadeNet1, dlProp);
-                obj.CascadeNet2 = initialize(obj.CascadeNet2, dlProp);
-                obj.CascadeNet3 = initialize(obj.CascadeNet3, dlProp);
-            end
-
-            [dlRPNScores, dlRPNReg] = predict(obj.RegionProposalNet, dlFeatures, 'Outputs',{'RPNClassOut', 'RPNRegOut'});
-
-
-            % Call region proposal
-            dlProposals = regionProposal(obj, dlRPNReg, dlRPNScores);
-
-            dlPooled1 = roiAlignPooling(obj, dlFeatures, dlProposals, obj.PoolSize);
-
-
-            [dlRPNScores2, dlRPNReg2] = predict(obj.CascadeNet1, dlPooled1, 'Outputs',{'RPNClassOut_1', 'RPNRegOut_1'});
-
-            refinedProposals2 = applyRegressionToProposals(obj, dlProposals, dlRPNReg2);
-
-            dlPooled2 = roiAlignPooling(obj, dlFeatures, refinedProposals2, obj.PoolSize);
-
-            [dlRPNScores3, dlRPNReg3] = predict(obj.CascadeNet2, dlPooled2, 'Outputs',{'RPNClassOut_2', 'RPNRegOut_2'});
-            refinedProposals3 = applyRegressionToProposals(obj, refinedProposals2, dlRPNReg3);
-            dlPooled3 = roiAlignPooling(obj, dlFeatures, refinedProposals3, obj.PoolSize);
-
-            [dlRPNScores4, dlRPNReg4] = predict(obj.CascadeNet3, dlPooled3, 'Outputs',{'RPNClassOut_3', 'RPNRegOut_3'});
-            refinedProposals4 = applyRegressionToProposals(obj, refinedProposals3, dlRPNReg4);
-            dlPooled4 = roiAlignPooling(obj, dlFeatures, refinedProposals4, obj.PoolSize);
-
-
-            if(~obj.PostPoolFeatureExtractionNet.Initialized)
-                obj.PostPoolFeatureExtractionNet = initialize(...
-                                            obj.PostPoolFeatureExtractionNet,...
-                                            dlPooled4, dlPooled4);
-            end
-
-            dlFinalFeatures = predict(obj.PostPoolFeatureExtractionNet, dlPooled4, dlPooled4);
-
-            % Box regression
-            if(~obj.DetectionHeads.Initialized)
-                obj.DetectionHeads = initialize(obj.DetectionHeads, dlFinalFeatures);
-            end
-
-            % Predict on mask branch to get h x w x numClasses x numProposals
-            % cropped masks.
-            if(~obj.MaskSegmentationHead.Initialized)
-                obj.MaskSegmentationHead = initialize(obj.MaskSegmentationHead,...
-                                                          dlFinalFeatures);
-            end
-            end
             
         end
         
