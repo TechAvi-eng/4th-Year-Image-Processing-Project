@@ -56,7 +56,7 @@ tic
 % %% utility to use model to test certain images 
 %net.ProposalsOutsideImage='clip';
 %net.MinScore = 0.001;
-     [masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.005,NumStrongestRegions=1000, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );
+     [masks,labels,scores,boxes] = segmentObjects(net,im,Threshold=0.0005,NumStrongestRegions=1000, SelectStrongest=true, MinSize=[1 1],MaxSize=[80 80] );
 toc
 
 %scores = 1./(1+exp(-scores));
