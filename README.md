@@ -5,6 +5,9 @@ Multires-ML-Microscopy is an open-source library written in MATLAB, featurin a f
 
 Designed for use in biological and medical research environments, the pipeline enables high-throughput and reproducible analysis of cellular morphology, supporting tasks such as drug testing, disease modelling, and cell behaviour studies.
 
+## HSMR25 Submission & DOI
+This repository accompanies our submission to The 17th Hamlyn Symposium on Medical Robotics (HSMR25), held at the Royal Geographical Society on 27th June 2025. Our work is presented as part of the session "Healing Through Collaboration: Open-Source Software in Surgical, Biomedical and AI Technologies", highlighting the importance of community-driven development in medical imaging. The full submission is archived with Zenodo and can be accessed via DOI: [10.5281/zenodo.15727799](https://doi.org/10.5281/zenodo.15727799).
+
 ## Getting help
 Enquiries about the library and questions should be asked on the discussion page of the GitHub or directed to the team of developers on the GitHub or via email:nikhil.dhulashia.21@ucl.ac.uk, or yigit.dogan.21@ucl.ac.uk
 
